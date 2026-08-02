@@ -61,11 +61,11 @@ void rope_insert(RopeNode* root, int idx, const char* str) {
     if (root->str != NULL) {
         // Base case, do the insertion
         if (root->weight + str_len >= LEAF_MAX_SIZE) {
-            // Split it
-        } else {
-            safe_insert(&root->str, &root->weight, str, str_len, idx);
+            rope_split_node(root);
+            return rope_insert(root, idx, str);
         }
 
+        safe_insert(&root->str, &root->weight, str, str_len, idx);
         return;
 
     }
@@ -76,7 +76,6 @@ void rope_insert(RopeNode* root, int idx, const char* str) {
 
     rope_insert(root->left, idx, str);
     root->weight += str_len;
-
 }
 
 RopeNode* rope_index(RopeNode* node, int startIndex) {
@@ -89,6 +88,35 @@ RopeNode* rope_index(RopeNode* node, int startIndex) {
     }
 
     return rope_index(node->left, startIndex);
+}
+
+void rope_split_node(RopeNode* node) {
+    // Create new nodes left and right and link them to the node. Split the string in half and put each half in the new leaf nodes. Return if not a leaf node
+    if (node->str == NULL) { return; }
+
+    RopeNode *left = malloc(sizeof(RopeNode));
+    RopeNode *right = malloc(sizeof(RopeNode));
+
+    rope_init(left);
+    rope_init(right);
+
+    node->left = left;
+    node->right = right;
+
+    size_t left_len = node->weight / 2;
+    size_t right_len = node->weight - left_len;
+
+    // Split node->str in half and put it in left->str and right->str
+    memcpy(left->str, node->str, left_len);
+    memcpy(right->str, &node->str[left_len], right_len);
+
+    free(node->str);
+    node->str = NULL;
+
+    // update weights
+    left->weight = left_len;
+    right->weight = right_len;
+    node->weight = left->weight;
 }
 
 void safe_append(char** buf, size_t* buf_len, size_t* buf_cap, const char* str, size_t str_len) {
