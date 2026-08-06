@@ -127,6 +127,44 @@ void rope_insert(RopeNode* root, int idx, const char* str, size_t str_len) {
     root->newlines += count_newlines(str, str_len);
 }
 
+void rope_delete(RopeNode* root, int idx, size_t len) {
+    if (len == 0) return;
+
+    if (root->str != NULL) {
+        // Leaf: clamp [idx, idx+len) to this leaf's own [0, weight) range
+        size_t start = (size_t)idx;
+        if (start >= root->weight) return;
+        size_t end = start + len;
+        if (end > root->weight) end = root->weight;
+
+        root->newlines -= count_newlines(root->str + start, end - start);
+        memmove(root->str + start, root->str + end, root->weight - end);
+        root->weight -= (end - start);
+        return;
+    }
+
+    // Internal node: left subtree covers [0, weight), right covers [weight, ...)
+    size_t original_weight = root->weight;
+
+    if ((size_t)idx < original_weight) {
+        size_t left_len = len;
+        if ((size_t)idx + left_len > original_weight) left_len = original_weight - idx;
+
+        size_t newlines_before = rope_total_newlines(root->left);
+        rope_delete(root->left, idx, left_len);
+        size_t newlines_after = rope_total_newlines(root->left);
+
+        root->weight -= left_len;
+        root->newlines -= (newlines_before - newlines_after);
+    }
+
+    if ((size_t)idx + len > original_weight) {
+        size_t right_idx = (size_t)idx > original_weight ? idx - original_weight : 0;
+        size_t right_len = (idx + len) - original_weight - right_idx;
+        rope_delete(root->right, right_idx, right_len);
+    }
+}
+
 RopeNode* rope_index(RopeNode* node, int startIndex) {
     if (node->str != NULL) {
         return node;

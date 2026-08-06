@@ -13,7 +13,7 @@ void Renderer_Init(void) {
 
     clear_screen();
     // Future rendering stuff maybe
-    
+    write(STDOUT_FILENO, "\x1b[6 q", 5);   
 }
 
 void Renderer_Exit(void) {
@@ -76,7 +76,9 @@ int read_key(char *buf) {
     }
     
     if (c == '\r') { buf[0] = '\n'; return 1; };
-
+    
+    if (c == CTRL_KEY('q')) return QUIT;
+    if (c == 0x7F) return BACKSPACE;
 
     if (c == '\x1b') {
         char seq[2];

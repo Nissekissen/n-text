@@ -10,7 +10,9 @@ enum editorKey {
     ARROW_UP = 1000,
     ARROW_DOWN,
     ARROW_RIGHT,
-    ARROW_LEFT
+    ARROW_LEFT,
+    QUIT,
+    BACKSPACE
 };
 
 void Renderer_Init(void);

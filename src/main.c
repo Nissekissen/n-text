@@ -39,11 +39,11 @@ int main(void) {
         char buf[5];
         int r = read_key(buf);
 
-        if (buf[0] == CTRL_KEY('q')) {
+        if (r == QUIT) {
             Renderer_Exit();
-        }
-
-        if (r == ARROW_UP) {
+        } else if (r == BACKSPACE) {
+            cursor_backspace(&cursor, &root);
+        } else if (r == ARROW_UP) {
             cursor_move_vertical(&cursor, &root, -1);
         } else if (r == ARROW_DOWN) {
             cursor_move_vertical(&cursor, &root, 1);
@@ -55,11 +55,12 @@ int main(void) {
 
             rope_insert(&root, cursor.offset, buf, r);
             cursor.offset += r;
-            buf_len = 0;
             
-            rope_collect(&root, &print_buf, &buf_len, &buf_cap);
-            cursor_get_row_col(&cursor, &root);
         }
+
+        buf_len = 0;
+        rope_collect(&root, &print_buf, &buf_len, &buf_cap);
+        cursor_get_row_col(&cursor, &root);
 
         clear_screen();
         // char seq[32];

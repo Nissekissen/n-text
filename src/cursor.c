@@ -40,28 +40,49 @@ void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta) {
         return;
     
     if (delta > 0) {
-        char *buf = malloc(1);
-        size_t buf_len = 0, buf_cap = 1;
-        rope_collect_between(rope, cursor->offset, cursor->offset + 1, &buf, &buf_len, &buf_cap);
-
-        int len = utf8_seq_len((unsigned char)buf[0]);
-        free(buf);
-
+        size_t len = move_forward_utf8(rope, cursor->offset);
         cursor->offset += len;
     } else {
-        size_t window_start = cursor->offset >= 4 ? cursor->offset - 4 : 0;
-        char *buf = malloc(4);
-        size_t buf_len = 0, buf_cap = 4;
-        rope_collect_between(rope, window_start, cursor->offset, &buf, &buf_len, &buf_cap);
-
-        size_t back = 1;
-        while (back < buf_len && ((unsigned char)buf[buf_len - back - 1] & 0xC0) == 0x80) {
-            back++;
-        }
-        free(buf);
-
+        size_t back = move_back_utf8(rope, cursor->offset);
         cursor->offset -= back;
     }
 
     cursor_get_row_col(cursor, rope);
+}
+
+void cursor_backspace(Cursor *cursor, RopeNode *rope) {
+    if (cursor->offset == 0) return;
+
+    size_t back = move_back_utf8(rope, cursor->offset);
+
+    rope_delete(rope, cursor->offset - back, back);
+    cursor->offset -= back;
+
+    cursor_get_row_col(cursor, rope);
+}
+
+size_t move_forward_utf8(RopeNode *rope, size_t offset) {
+    char *buf = malloc(1);
+    size_t buf_len = 0, buf_cap = 1;
+    rope_collect_between(rope, offset, offset + 1, &buf, &buf_len, &buf_cap);
+
+    int len = utf8_seq_len((unsigned char)buf[0]);
+    free(buf);
+
+    return len;
+}
+
+size_t move_back_utf8(RopeNode *rope, size_t offset) {
+    size_t window_start = offset >= 4 ? offset - 4 : 0;
+    char *buf = malloc(4);
+    size_t buf_len = 0, buf_cap = 4;
+    rope_collect_between(rope, window_start, offset, &buf, &buf_len, &buf_cap);
+
+    size_t back = 1;
+    while (back < buf_len && ((unsigned char)buf[buf_len - back - 1] & 0xC0) == 0x80) {
+        back++;
+    }
+    free(buf);
+
+    return back;
 }
