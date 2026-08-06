@@ -36,24 +36,28 @@ int main(void) {
     cursor_init(&cursor);
 
     while (1) {
-        int c = read_key();
-        if (c == CTRL_KEY('q')) {
+        char buf[5];
+        int r = read_key(buf);
+
+        if (buf[0] == CTRL_KEY('q')) {
             Renderer_Exit();
         }
 
-        if (c == ARROW_UP) {
+        if (r == ARROW_UP) {
             cursor_move_vertical(&cursor, &root, -1);
-        } else if (c == ARROW_DOWN) {
+        } else if (r == ARROW_DOWN) {
             cursor_move_vertical(&cursor, &root, 1);
+        } else if (r == ARROW_LEFT) {
+            cursor_move_horisontal(&cursor, &root, -1);
+        } else if (r == ARROW_RIGHT) {
+            cursor_move_horisontal(&cursor, &root, 1);
         } else {
-            char s[2] = { c, '\0' };
 
-            rope_insert(&root, cursor.offset, s);
-
+            rope_insert(&root, cursor.offset, buf, r);
+            cursor.offset += r;
             buf_len = 0;
             
             rope_collect(&root, &print_buf, &buf_len, &buf_cap);
-            cursor.offset++;
             cursor_get_row_col(&cursor, &root);
         }
 

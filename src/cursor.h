@@ -15,3 +15,4 @@ typedef struct {
 void cursor_init(Cursor *cursor);
 void cursor_get_row_col(Cursor* cursor, RopeNode *rope);
 void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta);
+void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta);

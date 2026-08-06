@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
 
 struct termios orig_termos;
 
@@ -39,7 +40,7 @@ void Renderer_print_buf(char* buf, size_t buf_len) {
 
 void Renderer_print_cursor(Cursor *cursor) {
     char buf[12];
-    int len = snprintf(buf, 12, "\x1b[%d;%dH", (int)cursor->row + 1, (int)cursor->column);
+    int len = snprintf(buf, 12, "\x1b[%d;%dH", (int)cursor->row + 1, (int)cursor->column + 1);
     write(STDOUT_FILENO, buf, len);
 }
 
@@ -67,14 +68,15 @@ void enable_raw_mode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-int read_key(void) {
-    char c;
+int read_key(char *buf) {
+    unsigned char c;
     ssize_t nread;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-        if (nread == 1 && errno != EAGAIN) die("read");
+        if (nread == -1 && errno != EAGAIN) die("read");
     }
+    
+    if (c == '\r') { buf[0] = '\n'; return 1; };
 
-    if (c == '\r') return '\n';
 
     if (c == '\x1b') {
         char seq[2];
@@ -90,8 +92,20 @@ int read_key(void) {
             }
         }
         
-        return '\x1b';
     }
     
-    return c;
+    int len = utf8_seq_len(c);
+    buf[0] = c;
+    nread = read(STDIN_FILENO, buf + 1, len - 1);
+    if (nread != len - 1) die("read");
+    return len;
 }
+
+int utf8_seq_len(unsigned char lead) {
+    if ((lead & 0x80) == 0x00) return 1;
+    if ((lead & 0xE0) == 0xC0) return 2;
+    if ((lead & 0xF0) == 0xE0) return 3;
+    if ((lead & 0xF8) == 0xF0) return 4;
+    return 1;
+}
+

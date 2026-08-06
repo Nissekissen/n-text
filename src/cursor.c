@@ -1,5 +1,6 @@
 #include "cursor.h"
 #include "rope.h"
+#include "renderer.h"
 
 void cursor_init(Cursor *cursor) {
     cursor->row = 0;
@@ -9,24 +10,58 @@ void cursor_init(Cursor *cursor) {
 
 void cursor_get_row_col(Cursor *cursor, RopeNode *rope) {
     size_t line = rope_line_of_offset(rope, cursor->offset);
-    size_t col = cursor->offset - rope_offset_of_line_start(rope, line);
+    size_t line_start = rope_offset_of_line_start(rope, line);
 
     cursor->row = line;
-    cursor->column = col;
+    cursor->column = rope_count_chars_between(rope, line_start, cursor->offset);
 }
 
 void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta) {
     size_t total_lines = rope_total_newlines(rope);
-    size_t line = rope_line_of_offset(rope, cursor->offset);
-    size_t col = rope_offset_of_line_start(rope, line);
+    cursor_get_row_col(cursor, rope);
 
-    if ((delta < 0 && line == 0) || (delta > 0 && line + 1 >= total_lines))
+    if ((delta < 0 && cursor->row == 0) || (delta > 0 && cursor->row + 1 > total_lines))
         return;
 
-    size_t target_line = line + delta;
+    size_t target_line = cursor->row + delta;
     size_t len = rope_line_length(rope, target_line, total_lines);
-    col = 0;
+    size_t col = 0;
     cursor->offset = rope_offset_of_line_start(rope, target_line) + col;
     cursor->row = target_line;
     cursor->column = col;
+}
+
+void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta) {
+    size_t total_lines = rope_total_newlines(rope);
+    cursor_get_row_col(cursor, rope);
+    size_t line_length = rope_line_length(rope, cursor->row, total_lines);
+
+    if ((delta < 0 && cursor->column == 0) || (delta > 0 && cursor->column >= line_length))
+        return;
+    
+    if (delta > 0) {
+        char *buf = malloc(1);
+        size_t buf_len = 0, buf_cap = 1;
+        rope_collect_between(rope, cursor->offset, cursor->offset + 1, &buf, &buf_len, &buf_cap);
+
+        int len = utf8_seq_len((unsigned char)buf[0]);
+        free(buf);
+
+        cursor->offset += len;
+    } else {
+        size_t window_start = cursor->offset >= 4 ? cursor->offset - 4 : 0;
+        char *buf = malloc(4);
+        size_t buf_len = 0, buf_cap = 4;
+        rope_collect_between(rope, window_start, cursor->offset, &buf, &buf_len, &buf_cap);
+
+        size_t back = 1;
+        while (back < buf_len && ((unsigned char)buf[buf_len - back - 1] & 0xC0) == 0x80) {
+            back++;
+        }
+        free(buf);
+
+        cursor->offset -= back;
+    }
+
+    cursor_get_row_col(cursor, rope);
 }

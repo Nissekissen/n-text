@@ -24,6 +24,7 @@ void enable_raw_mode(void);
 void disable_raw_mode(void);
 
 // Might move out of renderer sometime
-int read_key(void);
+int read_key(char *buf);
+int utf8_seq_len(unsigned char lead);
 
 void clear_screen(void);

@@ -56,14 +56,60 @@ void rope_collect_iter(RopeNode* root, Stack* stack, char** buf, size_t* buf_len
     rope_collect_iter(root, stack, buf, buf_len, buf_cap);
 }
 
-void rope_insert(RopeNode* root, int idx, const char* str) {
-    size_t str_len = strlen(str);
+void rope_collect_between(RopeNode* node, size_t from, size_t to, char** buf, size_t* buf_len, size_t* buf_cap) {
+    if (node == NULL || from >= to) return;
+
+    if (node->str != NULL) {
+        // Leaf: clamp [from, to) to this leaf's own [0, weight) range
+        size_t start = from < node->weight ? from : node->weight;
+        size_t end = to < node->weight ? to : node->weight;
+        if (end > start) {
+            safe_append(buf, buf_len, buf_cap, node->str + start, end - start);
+        }
+        return;
+    }
+
+    // Internal node: left subtree covers [0, weight), right covers [weight, ...)
+    if (from < node->weight) {
+        rope_collect_between(node->left, from, to, buf, buf_len, buf_cap);
+    }
+    if (to > node->weight) {
+        size_t right_from = from > node->weight ? from - node->weight : 0;
+        rope_collect_between(node->right, right_from, to - node->weight, buf, buf_len, buf_cap);
+    }
+}
+
+size_t rope_count_chars_between(RopeNode* node, size_t from, size_t to) {
+    if (node == NULL || from >= to) return 0;
+
+    if (node->str != NULL) {
+        size_t start = from < node->weight ? from : node->weight;
+        size_t end = to < node->weight ? to : node->weight;
+        size_t count = 0;
+        for (size_t i = start; i < end; i++) {
+            if (((unsigned char)node->str[i] & 0xC0) != 0x80) count++;
+        }
+        return count;
+    }
+
+    size_t count = 0;
+    if (from < node->weight) {
+        count += rope_count_chars_between(node->left, from, to);
+    }
+    if (to > node->weight) {
+        size_t right_from = from > node->weight ? from - node->weight : 0;
+        count += rope_count_chars_between(node->right, right_from, to - node->weight);
+    }
+    return count;
+}
+
+void rope_insert(RopeNode* root, int idx, const char* str, size_t str_len) {
     // Insert a string at the start of idx
     if (root->str != NULL) {
         // Base case, do the insertion
         if (root->weight + str_len >= LEAF_MAX_SIZE) {
             rope_split_node(root);
-            return rope_insert(root, idx, str);
+            return rope_insert(root, idx, str, str_len);
         }
 
         safe_insert(&root->str, &root->weight, str, str_len, idx);
@@ -73,10 +119,10 @@ void rope_insert(RopeNode* root, int idx, const char* str) {
     }
 
     if (idx >= root->weight) {
-        return rope_insert(root->right, idx - root->weight, str);
+        return rope_insert(root->right, idx - root->weight, str, str_len);
     }
 
-    rope_insert(root->left, idx, str);
+    rope_insert(root->left, idx, str, str_len);
     root->weight += str_len;
     root->newlines += count_newlines(str, str_len);
 }
@@ -179,10 +225,10 @@ size_t rope_offset_of_line_start(RopeNode *root, size_t line) {
 
 size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines) {
     size_t start = rope_offset_of_line_start(root, line);
-    if (line + 1 >= total_lines) return root->weight - start; // Last line, no trailing newline
+    if (line + 1 >= total_lines) return rope_count_chars_between(root, start, root->weight); // Last line, no trailing newline
 
     size_t next_start = rope_offset_of_line_start(root, line + 1);
-    return next_start - start - 1;
+    return rope_count_chars_between(root, start, next_start - 1);
 }
 
 size_t rope_total_newlines(RopeNode *node) {

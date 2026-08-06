@@ -23,7 +23,9 @@ typedef struct {
 void rope_init(RopeNode* root);
 void rope_collect(RopeNode* root, char** buf, size_t* buf_len, size_t* buf_cap);
 void rope_collect_iter(RopeNode* root, Stack* stack, char** buf, size_t* buf_len, size_t* buf_cap);
-void rope_insert(RopeNode* root, int idx, const char* str);
+void rope_collect_between(RopeNode* node, size_t from, size_t to, char** buf, size_t* buf_len, size_t* buf_cap);
+size_t rope_count_chars_between(RopeNode* node, size_t from, size_t to);
+void rope_insert(RopeNode* root, int idx, const char* str, size_t str_len);
 RopeNode* rope_index(RopeNode* node, int startIndex);
 void rope_split_node(RopeNode* node);
 
