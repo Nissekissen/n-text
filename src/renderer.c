@@ -37,6 +37,12 @@ void Renderer_print_buf(char* buf, size_t buf_len) {
     }
 }
 
+void Renderer_print_cursor(Cursor *cursor) {
+    char buf[12];
+    int len = snprintf(buf, 12, "\x1b[%d;%dH", (int)cursor->row + 1, (int)cursor->column);
+    write(STDOUT_FILENO, buf, len);
+}
+
 void die(const char *s) {
     clear_screen();
     write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to home

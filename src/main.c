@@ -6,17 +6,17 @@
 #include "cursor.h"
 #include <sys/ioctl.h>
 
-void print_cursor_debug(int row, int col) {
+void print_cursor_debug(Cursor* cursor, RopeNode* rope) {
     struct winsize ws;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws); // ws.ws_row / ws.ws_col = terminal size
-
+    size_t total_newlines = rope_total_newlines(rope);
     char seq[64];
     int len = snprintf(seq, sizeof(seq),
         "\x1b""7"                 // DECSC: save cursor pos + attrs
         "\x1b[%d;%dH"              // move to bottom-right-ish corner
-        "(%d,%d)"                  // the debug text
+        "(%d,%d) %d, %d"                  // the debug text
         "\x1b""8",                 // DECRC: restore cursor pos + attrs
-        ws.ws_row, ws.ws_col - 10, row, col);
+        ws.ws_row, ws.ws_col - 20, (int)cursor->row, (int)cursor->column, (int)total_newlines, (int)cursor->offset);
 
     write(STDOUT_FILENO, seq, len);
 }
@@ -63,11 +63,9 @@ int main(void) {
         // write(STDOUT_FILENO, seq, len);
         write(STDOUT_FILENO, "\x1b[H", 3);
         Renderer_print_buf(print_buf, buf_len);
-        print_cursor_debug(cursor.row, cursor.column);
+        print_cursor_debug(&cursor, &root);
         // move cursor to cursor pos
-        char buf[12];
-        int len = snprintf(buf, 12, "\x1b[%d;%dH", (int)cursor.row + 1, (int)cursor.column);
-        write(STDOUT_FILENO, buf, len);
+        Renderer_print_cursor(&cursor);
     }
     return 0;
 }

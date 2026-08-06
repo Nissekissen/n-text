@@ -9,7 +9,7 @@ void cursor_init(Cursor *cursor) {
 
 void cursor_get_row_col(Cursor *cursor, RopeNode *rope) {
     size_t line = rope_line_of_offset(rope, cursor->offset);
-    size_t col = rope_offset_of_line_start(rope, line);
+    size_t col = cursor->offset - rope_offset_of_line_start(rope, line);
 
     cursor->row = line;
     cursor->column = col;
@@ -17,15 +17,15 @@ void cursor_get_row_col(Cursor *cursor, RopeNode *rope) {
 
 void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta) {
     size_t total_lines = rope_total_newlines(rope);
-    cursor_get_row_col(cursor, rope);
+    size_t line = rope_line_of_offset(rope, cursor->offset);
+    size_t col = rope_offset_of_line_start(rope, line);
 
-    if ((delta < 0 && cursor->row == 0) || (delta > 0 && cursor->row + 1 >= total_lines))
+    if ((delta < 0 && line == 0) || (delta > 0 && line + 1 >= total_lines))
         return;
 
-    size_t target_line = cursor->row + delta;
+    size_t target_line = line + delta;
     size_t len = rope_line_length(rope, target_line, total_lines);
-    size_t col = 0; // TODO!
-
+    col = 0;
     cursor->offset = rope_offset_of_line_start(rope, target_line) + col;
     cursor->row = target_line;
     cursor->column = col;

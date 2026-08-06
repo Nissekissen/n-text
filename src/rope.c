@@ -162,8 +162,10 @@ size_t offset_of_nth_newline(RopeNode *node, size_t n) {
     // Leaf node
     size_t count = 0;
     for (size_t i = 0; i < strlen(node->str); i++) {
-        if (count == n) return offset + i;
-        count++;
+        if (node->str[i] == '\n') {
+            if (count == n) return offset + i;
+            count++;
+        }
     }
 
     // should be unreachable

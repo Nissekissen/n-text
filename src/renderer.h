@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include "cursor.h"
+
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
@@ -15,6 +17,7 @@ void Renderer_Init(void);
 void Renderer_Exit(void);
 void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
+void Renderer_print_cursor(Cursor* cursor);
 void die(const char* s);
 // Private methods
 void enable_raw_mode(void);
