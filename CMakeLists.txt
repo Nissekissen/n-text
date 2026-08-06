@@ -8,6 +8,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(cJSON CONFIG REQUIRED)
 
 add_executable(n_text src/main.c)
-target_sources(n_text PRIVATE src/renderer.c src/rope.c)
+target_sources(n_text PRIVATE src/renderer.c src/rope.c src/cursor.c)
 target_link_libraries(n_text PRIVATE cjson)
 

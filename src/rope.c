@@ -6,6 +6,7 @@ void rope_init(RopeNode* root) {
     root->left = NULL;
     root->right = NULL;
     root->weight = 0;
+    root->newlines = 0;
     root->str = malloc(LEAF_MAX_SIZE);
 }
 
@@ -66,6 +67,7 @@ void rope_insert(RopeNode* root, int idx, const char* str) {
         }
 
         safe_insert(&root->str, &root->weight, str, str_len, idx);
+        root->newlines += count_newlines(str, str_len);
         return;
 
     }
@@ -76,6 +78,7 @@ void rope_insert(RopeNode* root, int idx, const char* str) {
 
     rope_insert(root->left, idx, str);
     root->weight += str_len;
+    root->newlines += count_newlines(str, str_len);
 }
 
 RopeNode* rope_index(RopeNode* node, int startIndex) {
@@ -117,6 +120,73 @@ void rope_split_node(RopeNode* node) {
     left->weight = left_len;
     right->weight = right_len;
     node->weight = left->weight;
+
+    left->newlines  = count_newlines(left->str, left->weight);
+    right->newlines = count_newlines(right->str, right->weight);
+    node->newlines = left->newlines;
+}
+
+size_t rope_line_of_offset(RopeNode *node, size_t offset) {
+    size_t line = 0;
+    while (node->str == NULL) {
+        if (offset < node->left->weight) {
+            node = node->left;
+            continue;
+        }
+
+        line += node->left->newlines;
+        offset -= node->left->weight;
+        node = node->right;
+    }
+
+    // leaf node
+    for (size_t i = 0; i < offset; i++)
+        if (node->str[i] == '\n') line++;
+    
+    return line;
+}
+
+size_t offset_of_nth_newline(RopeNode *node, size_t n) {
+    size_t offset = 0;
+    while (node->str == NULL) {
+        if (n < node->left->newlines) {
+            node = node->left;
+            continue;
+        }
+
+        n -= node->left->newlines;
+        offset += node->left->weight;
+        node = node->right;
+    }
+
+    // Leaf node
+    size_t count = 0;
+    for (size_t i = 0; i < strlen(node->str); i++) {
+        if (count == n) return offset + i;
+        count++;
+    }
+
+    // should be unreachable
+    return 0;
+}
+
+size_t rope_offset_of_line_start(RopeNode *root, size_t line) {
+    if (line == 0) return 0;
+    return offset_of_nth_newline(root, line - 1) + 1;
+}
+
+size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines) {
+    size_t start = rope_offset_of_line_start(root, line);
+    if (line + 1 >= total_lines) return root->weight - start; // Last line, no trailing newline
+
+    size_t next_start = rope_offset_of_line_start(root, line + 1);
+    return next_start - start - 1;
+}
+
+size_t rope_total_newlines(RopeNode *node) {
+    if (node->str != NULL) return node->newlines;
+
+    return node->newlines + rope_total_newlines(node->right);
 }
 
 void safe_append(char** buf, size_t* buf_len, size_t* buf_cap, const char* str, size_t str_len) {
@@ -158,4 +228,13 @@ void stack_push(Stack* s, RopeNode data) {
 
 RopeNode stack_pop(Stack *s) {
     return s->data[--s->size];
+}
+
+size_t count_newlines(const char *str, size_t str_len) {
+    size_t count = 0;
+    for (int i = 0; i < str_len; i++) {
+        if (str[i] == '\n') count++;
+    }
+
+    return count;
 }

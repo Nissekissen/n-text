@@ -4,9 +4,16 @@
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
+enum editorKey {
+    ARROW_UP = 1000,
+    ARROW_DOWN,
+    ARROW_RIGHT,
+    ARROW_LEFT
+};
+
 void Renderer_Init(void);
 void Renderer_Exit(void);
-void Renderer_Print(char c);
+void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
 void die(const char* s);
 // Private methods
