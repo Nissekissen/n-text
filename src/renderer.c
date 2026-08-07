@@ -12,6 +12,8 @@
 struct termios orig_termos;
 
 void Renderer_Init(void) {
+
+    write(STDOUT_FILENO, "\x1b[?1049h", 8); // Enter alt screen
     enable_raw_mode();
 
     clear_screen();
@@ -28,6 +30,8 @@ void Renderer_Exit(void) {
     
     // Reset cursor shape
     write(STDOUT_FILENO, "\x1b[1 q", 5);
+    
+    write(STDOUT_FILENO, "\x1b[?1049l", 8); // back to original terminal
 
     exit(0);
 }
@@ -93,6 +97,9 @@ void Renderer_move_right(size_t chars) {
 void die(const char *s) {
     clear_screen();
     write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to home
+    
+    write(STDOUT_FILENO, "\x1b[?1049l", 8); // exit alt screen
+
     perror(s);
     exit(0);
 }
