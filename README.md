@@ -30,10 +30,9 @@ Quit with Ctrl+Q.
 - [ ] Open/save files
 - [ ] Forward delete key (only backspace exists)
 - [x] Tabspace
-- [ ] Scrolling for documents taller than the terminal window
+- [x] Scrolling for documents taller than the terminal window
 - [ ] Text selection
 - [ ] Undo/redo
-- [ ] Print buffer is only 1024 characters
 - [x] Show line numbers
 - [ ] Copy/paste
 - [x] Goal column when moving cursor

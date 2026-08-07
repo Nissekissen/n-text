@@ -18,11 +18,12 @@ enum editorKey {
 void Renderer_Init(void);
 void Renderer_Exit(void);
 void Renderer_print_line_numbers(size_t total_lines, size_t start_line);
+void Renderer_print_line_number(size_t number);
 void Renderer_move_to(int row, int col);
 void Renderer_move_right(size_t chars);
 void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
-void Renderer_print_cursor(Cursor* cursor);
+void Renderer_print_cursor(Cursor* cursor, size_t line_offset);
 void die(const char* s);
 // Private methods
 void enable_raw_mode(void);

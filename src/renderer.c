@@ -54,6 +54,17 @@ void Renderer_print_line_numbers(size_t total_lines, size_t start_line) {
     write(STDOUT_FILENO, "\033[0m", 4);
 }
 
+void Renderer_print_line_number(size_t number) {
+    
+    write(STDOUT_FILENO, "\033[38;5;242m", 11); // Set color to gray
+    
+    char buf[8];
+    int len = snprintf(buf, sizeof(buf), "%4zu ", number);
+    write(STDOUT_FILENO, buf, len);
+
+    write(STDOUT_FILENO, "\033[0m", 4); // Reset color
+}
+
 void Renderer_move_to(int row, int col) {
     char buf[12];
     int len = snprintf(buf, 12, "\x1b[%d;%dH", row, col);
@@ -72,20 +83,13 @@ void Renderer_Print(int c) {
 }
 
 void Renderer_print_buf(char* buf, size_t buf_len) {
-    // Move to 0, 0
-    write(STDOUT_FILENO, "\x1b[H", 3);
-    
-    // Move 4 characters to the right
-    Renderer_move_right(LEFT_MARGIN);
-
-    // Print the buffer
     for (int i = 0; i < buf_len; i++) {
         Renderer_Print(buf[i]);
     }
 }
 
-void Renderer_print_cursor(Cursor *cursor) {
-    Renderer_move_to((int) cursor->row + 1, (int) cursor->column + 1 + LEFT_MARGIN);
+void Renderer_print_cursor(Cursor *cursor, size_t line_offset) {
+    Renderer_move_to((int) (cursor->row - line_offset) + 1, (int) cursor->column + 1 + LEFT_MARGIN);
 }
 
 void Renderer_move_right(size_t chars) {
