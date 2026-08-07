@@ -13,11 +13,17 @@ enum editorKey {
     ARROW_LEFT,
     QUIT,
     SAVE,
+    SAVE_AS,
     BACKSPACE,
     MOUSE_SCROLL_UP,
     MOUSE_SCROLL_DOWN,
     MOUSE_CLICK
 };
+
+typedef enum {
+    MODE_NORMAL,
+    MODE_PROMPT_SAVE
+} EditorMode;
 
 void Renderer_Init(void);
 void Renderer_Exit(void);
@@ -28,6 +34,7 @@ void Renderer_move_right(size_t chars);
 void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
 void Renderer_print_cursor(Cursor* cursor, size_t line_offset, size_t visible_rows);
+
 void die(const char* s);
 // Private methods
 void enable_raw_mode(void);

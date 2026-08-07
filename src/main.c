@@ -7,6 +7,14 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <string.h>
+
+typedef struct {
+    EditorMode mode;
+    char **prompt_buf;
+    size_t *prompt_len;
+    int dirty;
+} StatusBar;
 
 void print_cursor_debug(Cursor* cursor, RopeNode* rope) {
     struct winsize ws;
@@ -58,10 +66,15 @@ void load_file(RopeNode *root, char *path) {
 
     close(fd);
 
-    // split buf into LEAF_MAX_SIZE - 1 chunks
+    // Chunk size must stay well under LEAF_MAX_SIZE / 2: rope_insert only
+    // ever performs one split per retry, and a single split roughly halves
+    // a full leaf's existing content — a chunk close to LEAF_MAX_SIZE won't
+    // fit after just one split, and splitting again never shrinks str_len,
+    // so it recurses forever instead of converging.
     size_t chunk_start = 0;
     while (chunk_start < size) {
-        size_t chunk_size = (size - chunk_start) >= LEAF_MAX_SIZE ? LEAF_MAX_SIZE - 1 : (size - chunk_start);
+        size_t max_chunk = LEAF_MAX_SIZE / 4;
+        size_t chunk_size = (size - chunk_start) >= max_chunk ? max_chunk : (size - chunk_start);
         rope_insert(root, chunk_start, buf + chunk_start, chunk_size);
         chunk_start += chunk_size;
     }
@@ -74,14 +87,32 @@ void scroll_to_cursor(Cursor *cursor, size_t *line_offset, struct winsize *ws) {
     if (cursor->row >= *line_offset + ws->ws_row) *line_offset = cursor->row - ws->ws_row + 1; // Scroll down
 }
 
-void render(RopeNode *root, Cursor *cursor, size_t *line_offset, struct winsize *ws, char **print_buf, size_t *buf_len, size_t *buf_cap) {
+void render(RopeNode *root, Cursor *cursor, StatusBar *status_bar, char *filename, size_t *line_offset, size_t *visible_rows, char **print_buf, size_t *buf_len, size_t *buf_cap) {
     clear_screen();
-    Renderer_move_to(0, 0);
+    
+    // Print status bar
+    char buf[300];
+    size_t status_len;
+    if (status_bar->mode == MODE_PROMPT_SAVE) {
+        status_len = snprintf(buf, sizeof(buf), "Save as: ");
+        size_t remaining = sizeof(buf) - status_len;
+        size_t copy_len = *status_bar->prompt_len < remaining ? *status_bar->prompt_len : remaining;
+        memcpy(buf + status_len, *status_bar->prompt_buf, copy_len);
+        status_len += copy_len;
+    } else if (filename) {
+        status_len = snprintf(buf, sizeof(buf), "%s%s", filename, status_bar->dirty ? " *" : "");
+    } else {
+        status_len = snprintf(buf, sizeof(buf), "unsaved*");
+    }
+
+    Renderer_move_to(1, 2);
+    Renderer_print_buf(buf, status_len);
+    
+    Renderer_move_to(2, 1);
 
     size_t total_lines = rope_total_newlines(root);
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, ws); // get window size
 
-    for (size_t i = 0; i < ws->ws_row; i++) {
+    for (size_t i = 0; i < *visible_rows; i++) {
         size_t line = i + *line_offset;
         if (line > total_lines) break;
 
@@ -100,18 +131,15 @@ void render(RopeNode *root, Cursor *cursor, size_t *line_offset, struct winsize 
 
 int main(int argc, char** argv) {
     char *filename = argv[1];
-    
-    if (argc < 2) {
-        die("File name required.");
-    }
-
+    if (argc < 2) filename = NULL;
     struct winsize ws;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws); // ws.ws_row / ws.ws_col = terminal size
+    size_t visible_rows = ws.ws_row - 1;
 
     RopeNode root;
     rope_init(&root);
     
-    load_file(&root, argv[1]);
+    if (filename != NULL) load_file(&root, argv[1]);
 
     char* print_buf = malloc(1024);
     size_t buf_len = 0;
@@ -119,6 +147,15 @@ int main(int argc, char** argv) {
 
     Cursor cursor;
     cursor_init(&cursor);
+ 
+    char *prompt_buf = malloc(256);
+    size_t prompt_len = 0;
+
+    StatusBar status_bar;
+    status_bar.mode = MODE_NORMAL;
+    status_bar.prompt_buf = &prompt_buf;
+    status_bar.prompt_len = &prompt_len;
+    status_bar.dirty = 0;
 
 
     Renderer_Init();
@@ -126,7 +163,7 @@ int main(int argc, char** argv) {
     size_t line_offset = 0;
     size_t total_newlines = rope_total_newlines(&root);
 
-    render(&root, &cursor, &line_offset, &ws, &print_buf, &buf_len, &buf_cap);
+    render(&root, &cursor, &status_bar, filename, &line_offset, &visible_rows, &print_buf, &buf_len, &buf_cap);
     
     size_t click_row = 0;
     size_t click_col = 0;
@@ -134,53 +171,84 @@ int main(int argc, char** argv) {
     while (1) {
         char buf[5];
         int r = read_key(buf, &click_row, &click_col);
-
-        if (r == QUIT) {
-            Renderer_Exit();
-        } else if (r == SAVE) {
-            save_file(&root, argv[1]);
-        } else if (r == BACKSPACE) {
-            cursor_backspace(&cursor, &root);
-        } else if (r == ARROW_UP) {
-            cursor_move_vertical(&cursor, &root, -1);
-            scroll_to_cursor(&cursor, &line_offset, &ws);
-        } else if (r == ARROW_DOWN) {
-            cursor_move_vertical(&cursor, &root, 1);
-            scroll_to_cursor(&cursor, &line_offset, &ws);
-        } else if (r == ARROW_LEFT) {
-            cursor_move_horisontal(&cursor, &root, -1);
-            scroll_to_cursor(&cursor, &line_offset, &ws);
-        } else if (r == ARROW_RIGHT) {
-            cursor_move_horisontal(&cursor, &root, 1);
-            scroll_to_cursor(&cursor, &line_offset, &ws);
-        } else if (r == MOUSE_SCROLL_UP) {
-            if (line_offset > 0) line_offset--;
-        } else if (r == MOUSE_SCROLL_DOWN) {
-            if (line_offset < total_newlines) line_offset++;
-        } else if (r == MOUSE_CLICK) {
-            size_t target_row = (click_row - 1) + line_offset;
-            int target_col_raw = ((int) click_col - 1) - LEFT_MARGIN;
-            size_t target_col = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
-
-            cursor_set_position(&cursor, &root, target_row, target_col);
-            scroll_to_cursor(&cursor, &line_offset, &ws);
-        } else if (r == '\x1b') {
-            // bare Escape, mouse release, or any other unhandled escape
-            // sequence — nothing to do, must not fall into text insertion
+        
+        if (status_bar.mode == MODE_PROMPT_SAVE) {
+            if (r == 1 && buf[0] == '\n') { // Enter - confirm
+                prompt_buf[prompt_len] = '\0';
+                filename = strdup(prompt_buf);
+                save_file(&root, filename);
+                status_bar.dirty = 0;
+                status_bar.mode = MODE_NORMAL;
+            } else if (r == '\x1b') {
+                status_bar.mode = MODE_NORMAL;
+            } else if (r == BACKSPACE) {
+                if (prompt_len > 0) prompt_len--;
+            } else if (r < 1000) {
+                memcpy(prompt_buf + prompt_len, buf, r);
+                prompt_len += r;
+            }
         } else {
+            if (r == QUIT) {
+                Renderer_Exit();
+            } else if (r == SAVE) {
+                if (filename != NULL) {
+                    save_file(&root, filename);
+                    status_bar.dirty = 0;
+                } else {
+                    status_bar.mode = MODE_PROMPT_SAVE;
+                    prompt_len = 0;
+                }
+            } else if (r == SAVE_AS) {
+                status_bar.mode = MODE_PROMPT_SAVE;
+                prompt_len = 0;
+            } else if (r == BACKSPACE) {
+                cursor_backspace(&cursor, &root);
+                status_bar.dirty = 1;
+            } else if (r == ARROW_UP) {
+                cursor_move_vertical(&cursor, &root, -1);
+                scroll_to_cursor(&cursor, &line_offset, &ws);
+            } else if (r == ARROW_DOWN) {
+                cursor_move_vertical(&cursor, &root, 1);
+                scroll_to_cursor(&cursor, &line_offset, &ws);
+            } else if (r == ARROW_LEFT) {
+                cursor_move_horisontal(&cursor, &root, -1);
+                scroll_to_cursor(&cursor, &line_offset, &ws);
+            } else if (r == ARROW_RIGHT) {
+                cursor_move_horisontal(&cursor, &root, 1);
+                scroll_to_cursor(&cursor, &line_offset, &ws);
+            } else if (r == MOUSE_SCROLL_UP) {
+                if (line_offset > 0) line_offset--;
+            } else if (r == MOUSE_SCROLL_DOWN) {
+                if (line_offset < total_newlines) line_offset++;
+            } else if (r == MOUSE_CLICK) {
+                size_t target_row = (click_row - 1) + line_offset - 1;
+                int target_col_raw = ((int) click_col - 1) - LEFT_MARGIN;
+                size_t target_col = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
 
-            rope_insert(&root, cursor.offset, buf, r);
-            cursor.offset += r;
-            cursor_get_row_col(&cursor, &root);
-            cursor.goal_column = cursor.column;
-            scroll_to_cursor(&cursor, &line_offset, &ws);
+                cursor_set_position(&cursor, &root, target_row, target_col);
+                scroll_to_cursor(&cursor, &line_offset, &ws);
+            } else if (r == '\x1b') {
+                // bare Escape, mouse release, or any other unhandled escape
+                // sequence — nothing to do, must not fall into text insertion
+            } else {
+
+                rope_insert(&root, cursor.offset, buf, r);
+                cursor.offset += r;
+                cursor_get_row_col(&cursor, &root);
+                cursor.goal_column = cursor.column;
+                scroll_to_cursor(&cursor, &line_offset, &ws);
+                status_bar.dirty = 1;
+            }
         }
 
         // Render
         //
         total_newlines = rope_total_newlines(&root);
         
-        render(&root, &cursor, &line_offset, &ws, &print_buf, &buf_len, &buf_cap);
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws); // ws.ws_row / ws.ws_col = terminal size
+        visible_rows = ws.ws_row - 1;
+
+        render(&root, &cursor, &status_bar, filename, &line_offset, &visible_rows, &print_buf, &buf_len, &buf_cap);
 
         // buf_len = 0;
         // rope_collect(&root, &print_buf, &buf_len, &buf_cap);
@@ -200,5 +268,8 @@ int main(int argc, char** argv) {
         // move cursor to cursor pos
         Renderer_print_cursor(&cursor, line_offset, ws.ws_row);
     }
+
+    free(print_buf);
+    free(prompt_buf);
     return 0;
 }

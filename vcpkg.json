@@ -1,7 +1,4 @@
 {
 	"name": "n-text",
-	"version": "0.1.0",
-	"dependencies": [
-		"cjson"
-	]
+	"version": "0.1.0"
 }

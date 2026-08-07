@@ -16,7 +16,7 @@ void Renderer_Init(void) {
 
     write(STDOUT_FILENO, "\x1b[?1000h", 8); // enable mouse tracking
     write(STDOUT_FILENO, "\x1b[?1006h", 8); // SGR extended mode
-
+    write(STDOUT_FILENO, "\x1b[?1002h", 8); // Enable mouse dragging
     write(STDOUT_FILENO, "\x1b[6 q", 5); // Set cursor shape
 }
 
@@ -31,6 +31,7 @@ void Renderer_Exit(void) {
 
     write(STDOUT_FILENO, "\x1b[?1000l", 8); // disable mouse tracking
     write(STDOUT_FILENO, "\x1b[?1006l", 8); // disable SGR extended mode
+    write(STDOUT_FILENO, "\x1b[?1002l", 8); // disbale mouse dragging
     exit(0);
 }
 
@@ -92,7 +93,7 @@ void Renderer_print_cursor(Cursor *cursor, size_t line_offset, size_t visible_ro
         return;
     }
     write(STDOUT_FILENO, "\x1b[?25h", 6); // ensure visible
-    Renderer_move_to((int) (cursor->row - line_offset) + 1, (int) cursor->column + 1 + LEFT_MARGIN);
+    Renderer_move_to((int) (cursor->row - line_offset) + 1 + 1, (int) cursor->column + 1 + LEFT_MARGIN);
 }
 
 void Renderer_move_right(size_t chars) {
@@ -142,6 +143,7 @@ int read_key(char *buf, size_t *click_row, size_t *click_col) {
     if (c == '\r') { buf[0] = '\n'; return 1; };
     
     if (c == CTRL_KEY('s')) return SAVE;
+    if (c == CTRL_KEY('S')) return SAVE_AS;
     if (c == CTRL_KEY('q')) return QUIT;
     if (c == 0x7F) return BACKSPACE;
 
