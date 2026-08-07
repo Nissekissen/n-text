@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #define LEAF_MAX_SIZE 1024
+#define TAB_WIDTH 4
+#define LEFT_MARGIN 5
 
 typedef struct RopeNode {
     struct RopeNode* left;

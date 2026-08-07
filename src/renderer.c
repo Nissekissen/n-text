@@ -6,8 +6,6 @@
 #include <errno.h>
 #include <string.h>
 
-#define TAB_WIDTH 4
-#define LEFT_MARGIN 5
 
 struct termios orig_termos;
 
@@ -16,11 +14,10 @@ void Renderer_Init(void) {
     write(STDOUT_FILENO, "\x1b[?1049h", 8); // Enter alt screen
     enable_raw_mode();
 
-    clear_screen();
-    // Future rendering stuff maybe
+    write(STDOUT_FILENO, "\x1b[?1000h", 8); // enable mouse tracking
+    write(STDOUT_FILENO, "\x1b[?1006h", 8); // SGR extended mode
 
-    // Set cursor shape
-    write(STDOUT_FILENO, "\x1b[6 q", 5);   
+    write(STDOUT_FILENO, "\x1b[6 q", 5); // Set cursor shape
 }
 
 void Renderer_Exit(void) {
@@ -28,11 +25,12 @@ void Renderer_Exit(void) {
     write(STDOUT_FILENO, "\x1b[2J", 4); // clear screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to home
     
-    // Reset cursor shape
-    write(STDOUT_FILENO, "\x1b[1 q", 5);
+    write(STDOUT_FILENO, "\x1b[1 q", 5); // reset cursor
     
     write(STDOUT_FILENO, "\x1b[?1049l", 8); // back to original terminal
 
+    write(STDOUT_FILENO, "\x1b[?1000l", 8); // disable mouse tracking
+    write(STDOUT_FILENO, "\x1b[?1006l", 8); // disable SGR extended mode
     exit(0);
 }
 
@@ -88,7 +86,12 @@ void Renderer_print_buf(char* buf, size_t buf_len) {
     }
 }
 
-void Renderer_print_cursor(Cursor *cursor, size_t line_offset) {
+void Renderer_print_cursor(Cursor *cursor, size_t line_offset, size_t visible_rows) {
+    if (cursor->row < line_offset || cursor->row >= line_offset + visible_rows) {
+        write(STDOUT_FILENO, "\x1b[?25l", 6); // hide cursor, it's scrolled out of view
+        return;
+    }
+    write(STDOUT_FILENO, "\x1b[?25h", 6); // ensure visible
     Renderer_move_to((int) (cursor->row - line_offset) + 1, (int) cursor->column + 1 + LEFT_MARGIN);
 }
 
@@ -99,13 +102,8 @@ void Renderer_move_right(size_t chars) {
 }
 
 void die(const char *s) {
-    clear_screen();
-    write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to home
-    
-    write(STDOUT_FILENO, "\x1b[?1049l", 8); // exit alt screen
-
     perror(s);
-    exit(0);
+    Renderer_Exit();
 }
 
 void disable_raw_mode(void) {
@@ -125,7 +123,16 @@ void enable_raw_mode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-int read_key(char *buf) {
+int read_ascii_number(unsigned char *c) {
+    int value = 0;
+    while (read(STDIN_FILENO, c, 1) == 1 && *c >= '0' && *c <= '9') {
+        value = value * 10 + (*c - '0');
+    }
+
+    return value;
+}
+
+int read_key(char *buf, size_t *click_row, size_t *click_col) {
     unsigned char c;
     ssize_t nread;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
@@ -134,6 +141,7 @@ int read_key(char *buf) {
     
     if (c == '\r') { buf[0] = '\n'; return 1; };
     
+    if (c == CTRL_KEY('s')) return SAVE;
     if (c == CTRL_KEY('q')) return QUIT;
     if (c == 0x7F) return BACKSPACE;
 
@@ -142,11 +150,32 @@ int read_key(char *buf) {
         return TAB_WIDTH;
     }
     if (c == '\x1b') {
-        char seq[2];
+        char seq[12];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
 
         if (seq[0] == '[') {
+
+            if (seq[1] == '<') {
+                // Mouse scrolling / click — always consume the full
+                // Cb;Cx;Cy(M|m) sequence before deciding what to do with it.
+                int Cb = read_ascii_number(&c);
+                int Cx = read_ascii_number(&c);
+                int Cy = read_ascii_number(&c);
+                // c now holds the terminator: 'M' = press, 'm' = release
+
+                if (Cb == 64) return MOUSE_SCROLL_UP;
+                if (Cb == 65) return MOUSE_SCROLL_DOWN;
+
+                if (Cb == 0 && c == 'M') {
+                    *click_row = Cy;
+                    *click_col = Cx;
+                    return MOUSE_CLICK;
+                }
+
+                return '\x1b'; // some other button/event we don't handle yet
+            }
+
             switch(seq[1]) {
                 case 'A': return ARROW_UP;
                 case 'B': return ARROW_DOWN;

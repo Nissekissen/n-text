@@ -74,6 +74,24 @@ void cursor_backspace(Cursor *cursor, RopeNode *rope) {
     cursor->goal_column = cursor->column;
 }
 
+void cursor_set_position(Cursor *cursor, RopeNode *rope, size_t target_row, size_t target_col) {
+    size_t total_lines = rope_total_newlines(rope);
+    if (target_row > total_lines) target_row = total_lines;
+
+    size_t len = rope_line_length(rope, target_row, total_lines);
+    size_t col = target_col > len ? len : target_col;
+
+    size_t offset = rope_offset_of_line_start(rope, target_row);
+    for (size_t i = 0; i < col; i++) {
+        offset += move_forward_utf8(rope, offset);
+    }
+
+    cursor->offset = offset;
+    cursor->row = target_row;
+    cursor->column = col;
+    cursor->goal_column = col;
+}
+
 size_t move_forward_utf8(RopeNode *rope, size_t offset) {
     char *buf = malloc(1);
     size_t buf_len = 0, buf_cap = 1;
