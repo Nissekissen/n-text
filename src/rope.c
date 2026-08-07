@@ -263,7 +263,7 @@ size_t rope_offset_of_line_start(RopeNode *root, size_t line) {
 
 size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines) {
     size_t start = rope_offset_of_line_start(root, line);
-    if (line + 1 >= total_lines) return rope_count_chars_between(root, start, root->weight); // Last line, no trailing newline
+    if (line + 1 > total_lines) return rope_count_chars_between(root, start, root->weight); // Last line, no trailing newline
 
     size_t next_start = rope_offset_of_line_start(root, line + 1);
     return rope_count_chars_between(root, start, next_start - 1);

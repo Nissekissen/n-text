@@ -55,17 +55,22 @@ int main(void) {
 
             rope_insert(&root, cursor.offset, buf, r);
             cursor.offset += r;
-            
+            cursor_get_row_col(&cursor, &root);
+            cursor.goal_column = cursor.column;
         }
 
         buf_len = 0;
         rope_collect(&root, &print_buf, &buf_len, &buf_cap);
         cursor_get_row_col(&cursor, &root);
+        
 
         clear_screen();
         // char seq[32];
         // int len = snprintf(seq, sizeof(seq), "\x1b[%d;%dH", row, col);
         // write(STDOUT_FILENO, seq, len);
+        size_t total_rows = rope_total_newlines(&root);
+        Renderer_print_line_numbers(total_rows, 0);
+        
         write(STDOUT_FILENO, "\x1b[H", 3);
         Renderer_print_buf(print_buf, buf_len);
         print_cursor_debug(&cursor, &root);

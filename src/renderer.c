@@ -6,6 +6,9 @@
 #include <errno.h>
 #include <string.h>
 
+#define TAB_WIDTH 4
+#define LEFT_MARGIN 5
+
 struct termios orig_termos;
 
 void Renderer_Init(void) {
@@ -13,6 +16,8 @@ void Renderer_Init(void) {
 
     clear_screen();
     // Future rendering stuff maybe
+
+    // Set cursor shape
     write(STDOUT_FILENO, "\x1b[6 q", 5);   
 }
 
@@ -20,27 +25,68 @@ void Renderer_Exit(void) {
 
     write(STDOUT_FILENO, "\x1b[2J", 4); // clear screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to home
+    
+    // Reset cursor shape
+    write(STDOUT_FILENO, "\x1b[1 q", 5);
 
     exit(0);
+}
+
+void Renderer_print_line_numbers(size_t total_lines, size_t start_line) {
+    
+    // Set color to gray
+    write(STDOUT_FILENO, "\033[38;5;242m", 11);
+    for (size_t i = 0; i <= total_lines; i++) {
+        // Move to start of line
+        Renderer_move_to(i + 1, 0);
+        
+        char buf[8];
+        int len = snprintf(buf, sizeof(buf), "%4zu", i + start_line + 1);
+        write(STDOUT_FILENO, buf, len);
+        
+    }
+
+    // Reset color
+    write(STDOUT_FILENO, "\033[0m", 4);
+}
+
+void Renderer_move_to(int row, int col) {
+    char buf[12];
+    int len = snprintf(buf, 12, "\x1b[%d;%dH", row, col);
+    write(STDOUT_FILENO, buf, len);
 }
 
 void Renderer_Print(int c) {
     if (c == '\n') {
         write(STDOUT_FILENO, "\r\n", 2);
+
+        // Move LEFT_MARGIN characters to the right
+        Renderer_move_right(LEFT_MARGIN);
         return;
     }
     write(STDOUT_FILENO, &c, 1);
 }
 
 void Renderer_print_buf(char* buf, size_t buf_len) {
+    // Move to 0, 0
+    write(STDOUT_FILENO, "\x1b[H", 3);
+    
+    // Move 4 characters to the right
+    Renderer_move_right(LEFT_MARGIN);
+
+    // Print the buffer
     for (int i = 0; i < buf_len; i++) {
         Renderer_Print(buf[i]);
     }
 }
 
 void Renderer_print_cursor(Cursor *cursor) {
-    char buf[12];
-    int len = snprintf(buf, 12, "\x1b[%d;%dH", (int)cursor->row + 1, (int)cursor->column + 1);
+    Renderer_move_to((int) cursor->row + 1, (int) cursor->column + 1 + LEFT_MARGIN);
+}
+
+void Renderer_move_right(size_t chars) {
+    char buf[8];
+    int len = snprintf(buf, sizeof(buf), "\x1b[%zuC", chars);
     write(STDOUT_FILENO, buf, len);
 }
 
@@ -80,6 +126,10 @@ int read_key(char *buf) {
     if (c == CTRL_KEY('q')) return QUIT;
     if (c == 0x7F) return BACKSPACE;
 
+    if (c == '\t') {
+        for (int i = 0; i < TAB_WIDTH; i++) buf[i] = ' ';
+        return TAB_WIDTH;
+    }
     if (c == '\x1b') {
         char seq[2];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';

@@ -10,6 +10,7 @@ typedef struct {
     uint16_t offset;
     size_t row;
     size_t column;
+    size_t goal_column;
 } Cursor;
 
 void cursor_init(Cursor *cursor);

@@ -5,6 +5,7 @@
 void cursor_init(Cursor *cursor) {
     cursor->row = 0;
     cursor->column = 0;
+    cursor->goal_column = 0;
     cursor->offset = 0;
 }
 
@@ -20,13 +21,23 @@ void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta) {
     size_t total_lines = rope_total_newlines(rope);
     cursor_get_row_col(cursor, rope);
 
-    if ((delta < 0 && cursor->row == 0) || (delta > 0 && cursor->row + 1 > total_lines))
+    if (delta < 0 && cursor->row == 0)
         return;
-
-    size_t target_line = cursor->row + delta;
+    
+    size_t target_line = cursor->row + (cursor->row >= total_lines && delta > 0 ? 0 : delta);
     size_t len = rope_line_length(rope, target_line, total_lines);
-    size_t col = 0;
-    cursor->offset = rope_offset_of_line_start(rope, target_line) + col;
+    size_t col = cursor->goal_column > len ? len : cursor->goal_column;
+
+    if (delta > 0 && cursor->row >= total_lines) {
+        col = len;
+    }
+
+    size_t offset = rope_offset_of_line_start(rope, target_line);
+    for (size_t i = 0; i < col; i++) {
+        offset += move_forward_utf8(rope, offset);
+    }
+
+    cursor->offset = offset;
     cursor->row = target_line;
     cursor->column = col;
 }
@@ -48,6 +59,7 @@ void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta) {
     }
 
     cursor_get_row_col(cursor, rope);
+    cursor->goal_column = cursor->column;
 }
 
 void cursor_backspace(Cursor *cursor, RopeNode *rope) {
@@ -59,6 +71,7 @@ void cursor_backspace(Cursor *cursor, RopeNode *rope) {
     cursor->offset -= back;
 
     cursor_get_row_col(cursor, rope);
+    cursor->goal_column = cursor->column;
 }
 
 size_t move_forward_utf8(RopeNode *rope, size_t offset) {
@@ -79,7 +92,7 @@ size_t move_back_utf8(RopeNode *rope, size_t offset) {
     rope_collect_between(rope, window_start, offset, &buf, &buf_len, &buf_cap);
 
     size_t back = 1;
-    while (back < buf_len && ((unsigned char)buf[buf_len - back - 1] & 0xC0) == 0x80) {
+    while (back < buf_len && ((unsigned char)buf[buf_len - back] & 0xC0) == 0x80) {
         back++;
     }
     free(buf);
