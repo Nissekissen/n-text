@@ -124,6 +124,11 @@ void enable_raw_mode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+void scroll_to_cursor(Cursor *cursor, size_t *line_offset, struct winsize *ws) {
+    if (cursor->row < *line_offset) *line_offset = cursor->row; // Scroll up
+    if (cursor->row >= *line_offset + ws->ws_row) *line_offset = cursor->row - ws->ws_row + 1; // Scroll down
+}
+
 int read_ascii_number(unsigned char *c) {
     int value = 0;
     while (read(STDIN_FILENO, c, 1) == 1 && *c >= '0' && *c <= '9') {
@@ -133,66 +138,133 @@ int read_ascii_number(unsigned char *c) {
     return value;
 }
 
-int read_key(char *buf, size_t *click_row, size_t *click_col) {
+int is_csi_arrow_key(unsigned char c) {
+    return c == 'A' || c == 'B' || c == 'C' || c == 'D';
+}
+
+int csi_get_arrow_key(unsigned char c) {
+    switch (c) {
+        case 'A': return ARROW_UP;
+        case 'B': return ARROW_DOWN;
+        case 'C': return ARROW_RIGHT;
+        case 'D': return ARROW_LEFT;
+        default: return 0;
+    }
+}
+
+InputEvent read_key(void) {
+    InputEvent event = {0};
+    
     unsigned char c;
     ssize_t nread;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if (nread == -1 && errno != EAGAIN) die("read");
     }
     
-    if (c == '\r') { buf[0] = '\n'; return 1; };
+    if (c == '\r') { event.bytes[0] = '\n'; event.byte_count = 1; return event; };
     
-    if (c == CTRL_KEY('s')) return SAVE;
-    if (c == CTRL_KEY('S')) return SAVE_AS;
-    if (c == CTRL_KEY('q')) return QUIT;
-    if (c == 0x7F) return BACKSPACE;
+    if (c == CTRL_KEY('s')) { event.keyCode = SAVE; return event; }
+    if (c == CTRL_KEY('S')) { event.keyCode = SAVE_AS; return event; }
+    if (c == CTRL_KEY('q')) { event.keyCode = QUIT; return event; }
+    if (c == 0x7F) { event.keyCode = BACKSPACE; return event; }
 
     if (c == '\t') {
-        for (int i = 0; i < TAB_WIDTH; i++) buf[i] = ' ';
-        return TAB_WIDTH;
+        for (int i = 0; i < TAB_WIDTH; i++) event.bytes[i] = ' ';
+        event.byte_count = TAB_WIDTH;
+        return event;
     }
+
     if (c == '\x1b') {
-        char seq[12];
-        if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
-        if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
 
-        if (seq[0] == '[') {
+        char bracketHopefully;
+        if (read(STDIN_FILENO, &bracketHopefully, 1) != 1) { event.keyCode = ESC; return event; }
+        if (bracketHopefully != '[') { // ALT + key
+            event.modifiers |= MOD_ALT;
+            event.bytes[0] = bracketHopefully;
+            event.byte_count = 1;
+            return event;
+        }
+        
+        CSI_Parser_return parse_value = csi_parse();
+        if (parse_value.privateMarker == '<') {
+            // mouse scrolling / click
+            
+            if (parse_value.parameterCount < 3) { event.keyCode = ESC; return event; } // Malformed
 
-            if (seq[1] == '<') {
-                // Mouse scrolling / click — always consume the full
-                // Cb;Cx;Cy(M|m) sequence before deciding what to do with it.
-                int Cb = read_ascii_number(&c);
-                int Cx = read_ascii_number(&c);
-                int Cy = read_ascii_number(&c);
-                // c now holds the terminator: 'M' = press, 'm' = release
+            int Cb = parse_value.parameters[0];
+            int Cx = parse_value.parameters[1];
+            int Cy = parse_value.parameters[2];
 
-                if (Cb == 64) return MOUSE_SCROLL_UP;
-                if (Cb == 65) return MOUSE_SCROLL_DOWN;
+            if (Cb == 64) { event.keyCode = MOUSE_SCROLL_UP;   return event; }
+            if (Cb == 65) { event.keyCode = MOUSE_SCROLL_DOWN; return event; }
 
-                if (Cb == 0 && c == 'M') {
-                    *click_row = Cy;
-                    *click_col = Cx;
-                    return MOUSE_CLICK;
-                }
-
-                return '\x1b'; // some other button/event we don't handle yet
-            }
-
-            switch(seq[1]) {
-                case 'A': return ARROW_UP;
-                case 'B': return ARROW_DOWN;
-                case 'C': return ARROW_RIGHT;
-                case 'D': return ARROW_LEFT;
+            if (Cb == 0 && parse_value.finalChar == 'M') {
+                event.click_row = Cy;
+                event.click_col = Cx;
+                event.keyCode = MOUSE_CLICK;
+                return event;
             }
         }
         
+        if (is_csi_arrow_key(parse_value.finalChar)) {
+            if (parse_value.parameterCount == 0) {
+                event.keyCode = csi_get_arrow_key(parse_value.finalChar);
+                return event;
+            }
+
+            if (parse_value.parameterCount >= 2) event.modifiers = parse_value.parameters[1] - 1;
+
+            event.keyCode = csi_get_arrow_key(parse_value.finalChar);
+            return event;
+        }
+
+        event.keyCode = ESC;
+        return event;
     }
     
+    // Regular characters
     int len = utf8_seq_len(c);
-    buf[0] = c;
-    nread = read(STDIN_FILENO, buf + 1, len - 1);
+    event.bytes[0] = c;
+    nread = read(STDIN_FILENO, event.bytes + 1, len - 1);
     if (nread != len - 1) die("read");
-    return len;
+    event.byte_count = len;
+    return event;
+}
+int is_csi_final_byte(unsigned char c) {
+    return c >= 0x40 && c <= 0x7E;
+}
+
+int is_csi_private_marker(unsigned char c) {
+    return c == '<' || c == '>' || c == '=' || c == '?';
+}
+
+int is_csi_parameter_byte(unsigned char c) {
+    return c >= 0x30 && c <= 0x3F;
+}
+
+CSI_Parser_return csi_parse() {
+    // ESC[ has already been read.
+    CSI_Parser_return return_val = {0};
+    char c;
+    int paramFlag = 0;
+    while (read(STDIN_FILENO, &c, 1) == 1) {
+        if (is_csi_private_marker(c)) { return_val.privateMarker = c; continue; }
+        if (is_csi_final_byte(c)) {
+            if (paramFlag) return_val.parameterCount++;
+            return_val.finalChar = c;
+            break;
+        }
+        
+        if (!is_csi_parameter_byte(c)) continue; // Weird byte I guess?
+        
+        paramFlag = 1;
+
+        // Parse as integer
+        if (c == ';') { return_val.parameterCount++; continue; }
+        if (return_val.parameterCount < 4) return_val.parameters[return_val.parameterCount] = return_val.parameters[return_val.parameterCount] * 10 + (c - '0');
+    }
+
+    return return_val;
 }
 
 int utf8_seq_len(unsigned char lead) {
