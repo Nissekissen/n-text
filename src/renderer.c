@@ -17,6 +17,7 @@ void Renderer_Init(void) {
     write(STDOUT_FILENO, "\x1b[?1000h", 8); // enable mouse tracking
     write(STDOUT_FILENO, "\x1b[?1006h", 8); // SGR extended mode
     write(STDOUT_FILENO, "\x1b[?1002h", 8); // Enable mouse dragging
+    write(STDOUT_FILENO, "\x1b[?2004h", 8); // enable bracketed paste mode
     write(STDOUT_FILENO, "\x1b[6 q", 5); // Set cursor shape
 }
 
@@ -32,6 +33,7 @@ void Renderer_Exit(void) {
     write(STDOUT_FILENO, "\x1b[?1000l", 8); // disable mouse tracking
     write(STDOUT_FILENO, "\x1b[?1006l", 8); // disable SGR extended mode
     write(STDOUT_FILENO, "\x1b[?1002l", 8); // disbale mouse dragging
+    write(STDOUT_FILENO, "\x1b[?2004l", 8); // disable bracketed paste mode
     exit(0);
 }
 
@@ -122,6 +124,23 @@ void enable_raw_mode(void) {
     struct termios raw = orig_termos;
     cfmakeraw(&raw);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+void normalize_line_endings(InputEvent *event) {
+    size_t w = 0;
+    for (size_t r = 0; r < event->paste_len; r++) {
+        if (r < event->paste_len - 1 && event->paste_data[r] == '\r' && event->paste_data[r+ 1] == '\n') continue;
+        if (event->paste_data[r] == '\r') {
+            event->paste_data[w] = '\n';
+            w++;
+            continue;
+        }
+
+        event->paste_data[w] = event->paste_data[r];
+        w++;
+    }
+
+    event->paste_len = w;
 }
 
 void scroll_to_cursor(Cursor *cursor, size_t *line_offset, struct winsize *ws) {
@@ -219,6 +238,31 @@ InputEvent read_key(void) {
 
             event.keyCode = csi_get_arrow_key(parse_value.finalChar);
             return event;
+        }
+
+        if (parse_value.finalChar == '~' && parse_value.parameterCount >= 1) {
+            if (parse_value.parameters[0] == 3) { event.keyCode = FORWARD_DELETE; return event; }
+            
+            if (parse_value.parameters[0] == 200) {
+                // paste start
+                // Read from stdin until we see ESC[201~
+                event.paste_data = malloc(1024);
+                size_t paste_cap = 1024;
+
+                while ((nread = read(STDIN_FILENO, &c, 1)) == 1) {
+                    safe_append(&event.paste_data, &event.paste_len, &paste_cap, (const char*)&c, 1);
+
+                    if (event.paste_len >= 6 && memcmp(event.paste_data + event.paste_len - 6, "\x1b[201~", 6) == 0) {
+                        event.paste_len -= 6;
+                        break;
+                    }
+                }
+                if (nread == -1 && errno != EAGAIN) die("read");
+
+                normalize_line_endings(&event);
+
+                return event;
+            }
         }
 
         if (parse_value.parameterCount >= 1 && parse_value.parameters[0] == 3 && parse_value.finalChar == '~') { // Forward delete key

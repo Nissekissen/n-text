@@ -274,6 +274,17 @@ int main(int argc, char** argv) {
             continue;
         }
 
+        if (event.paste_data != NULL) {
+            editor_insert_text(&editor, event.paste_data, event.paste_len);
+            free(event.paste_data);
+
+            editor.selection.active = 0;
+            editor.selection.via_toggle = 0;
+
+            render(&editor);
+            continue;
+        }
+
         if (event.keyCode == 0) continue;
 
         switch (event.keyCode) {

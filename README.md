@@ -39,8 +39,6 @@ Make sure the install location's `bin` directory is on your `$PATH`. Once instal
 ntxt file.txt
 ```
 
-Note that `cmake --install` copies the binary rather than linking it — if you keep working on the source afterward, the installed copy won't reflect new changes until you rebuild and reinstall. Prefer `./build/ntxt` directly while actively developing, and only reinstall once you want a new version generally available.
-
 ## TODO
 
 - [x] Open/save files
@@ -52,3 +50,4 @@ Note that `cmake --install` copies the binary rather than linking it — if you 
 - [x] Show line numbers
 - [ ] Copy/paste
 - [x] Goal column when moving cursor
+- [ ] Rendering bug when line overflows

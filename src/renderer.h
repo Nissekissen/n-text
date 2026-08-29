@@ -53,6 +53,8 @@ typedef struct {
     size_t click_row;
     size_t click_col;
     int modifiers;
+    char *paste_data;
+    size_t paste_len;
 } InputEvent;
 
 void Renderer_Init(void);
