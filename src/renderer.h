@@ -24,7 +24,10 @@ enum editorKey {
     BACKSPACE,
     MOUSE_SCROLL_UP,
     MOUSE_SCROLL_DOWN,
-    MOUSE_CLICK
+    MOUSE_CLICK,
+    MOUSE_DRAG,
+    MOUSE_RELEASE,
+    TOGGLE_SELECT
 };
 
 typedef enum {

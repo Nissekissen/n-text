@@ -166,6 +166,7 @@ InputEvent read_key(void) {
     if (c == CTRL_KEY('s')) { event.keyCode = SAVE; return event; }
     if (c == CTRL_KEY('S')) { event.keyCode = SAVE_AS; return event; }
     if (c == CTRL_KEY('q')) { event.keyCode = QUIT; return event; }
+    if (c == CTRL_KEY(' ')) { event.keyCode = TOGGLE_SELECT; return event; }
     if (c == 0x7F) { event.keyCode = BACKSPACE; return event; }
 
     if (c == '\t') {
@@ -188,7 +189,6 @@ InputEvent read_key(void) {
         CSI_Parser_return parse_value = csi_parse();
         if (parse_value.privateMarker == '<') {
             // mouse scrolling / click
-            
             if (parse_value.parameterCount < 3) { event.keyCode = ESC; return event; } // Malformed
 
             int Cb = parse_value.parameters[0];
@@ -198,12 +198,12 @@ InputEvent read_key(void) {
             if (Cb == 64) { event.keyCode = MOUSE_SCROLL_UP;   return event; }
             if (Cb == 65) { event.keyCode = MOUSE_SCROLL_DOWN; return event; }
 
-            if (Cb == 0 && parse_value.finalChar == 'M') {
-                event.click_row = Cy;
-                event.click_col = Cx;
-                event.keyCode = MOUSE_CLICK;
-                return event;
-            }
+            event.click_row = Cy;
+            event.click_col = Cx;
+
+            if (Cb == 32 && parse_value.finalChar == 'M') { event.keyCode =    MOUSE_DRAG; return event; }
+            if (Cb ==  0 && parse_value.finalChar == 'm') { event.keyCode = MOUSE_RELEASE; return event; }
+            if (Cb ==  0 && parse_value.finalChar == 'M') { event.keyCode =   MOUSE_CLICK; return event; }
         }
         
         if (is_csi_arrow_key(parse_value.finalChar)) {

@@ -74,6 +74,17 @@ void cursor_backspace(Cursor *cursor, RopeNode *rope) {
     cursor->goal_column = cursor->column;
 }
 
+void cursor_delete_section(Cursor *cursor, RopeNode *rope, size_t start, size_t end) {
+    if (start > end) return;
+    if (start == end) return cursor_backspace(cursor, rope);
+
+    rope_delete(rope, start, end - start);
+
+    cursor->offset = start;
+    cursor_get_row_col(cursor, rope);
+    cursor->goal_column = cursor->column;
+}
+
 void cursor_set_position(Cursor *cursor, RopeNode *rope, size_t target_row, size_t target_col) {
     size_t total_lines = rope_total_newlines(rope);
     if (target_row > total_lines) target_row = total_lines;

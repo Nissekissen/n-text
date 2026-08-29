@@ -47,7 +47,7 @@ Note that `cmake --install` copies the binary rather than linking it — if you 
 - [ ] Forward delete key (only backspace exists)
 - [x] Tabspace
 - [x] Scrolling for documents taller than the terminal window
-- [ ] Text selection
+- [x] Text selection
 - [ ] Undo/redo
 - [x] Show line numbers
 - [ ] Copy/paste

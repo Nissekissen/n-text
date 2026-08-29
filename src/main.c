@@ -17,13 +17,23 @@ typedef struct {
 } StatusBar;
 
 typedef struct {
+    int active;
+    size_t anchor_offset;
+    int via_toggle;
+} Selection;
+
+typedef struct {
     RopeNode root;
     Cursor cursor;
     char *filename;
     size_t line_offset;
     struct winsize ws;
     StatusBar status_bar;
+    Selection selection;
 } Editor;
+
+static inline size_t max_size(size_t a, size_t b) { return a > b ? a : b; }
+static inline size_t min_size(size_t a, size_t b) { return a < b ? a : b; }
 
 int visible_rows(Editor *editor) {
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &editor->ws);
@@ -40,7 +50,19 @@ void print_cursor_debug(Editor *editor) {
         "\x1b[%d;%dH"              // move to bottom-right-ish corner
         "(%d,%d) %d, %d"                  // the debug text
         "\x1b""8",                 // DECRC: restore cursor pos + attrs
-        editor->ws.ws_row, editor->ws.ws_col - 20, (int)editor->cursor.row, (int)editor->cursor.column, (int)total_newlines, (int)editor->cursor.offset);
+        editor->ws.ws_row, editor->ws.ws_col - 40, (int)editor->cursor.row, (int)editor->cursor.column, (int)total_newlines, (int)editor->cursor.offset);
+
+    write(STDOUT_FILENO, seq, len);
+}
+
+void print_key_buf_debug(Editor *editor, InputEvent event) {
+    char seq[128];
+    int len = snprintf(seq, sizeof(seq),
+            "\x1b""7"
+            "\x1b[%d;%dH"
+            "keycode: %d, modifiers: %x"
+            "\x1b""8",
+            editor->ws.ws_row, editor->ws.ws_col - 40, event.keyCode, event.modifiers);
 
     write(STDOUT_FILENO, seq, len);
 }
@@ -97,6 +119,15 @@ void load_file(Editor *editor, char *path) {
 }
 
 void handle_arrow_keys(Editor *editor, int arrow_key, int shift) {
+    if (shift && !editor->selection.active) {
+        editor->selection.anchor_offset = editor->cursor.offset;
+        editor->selection.active = 1;
+    }
+
+    if (!shift && editor->selection.active && !editor->selection.via_toggle) {
+        editor->selection.active = 0;
+    }
+
     if (arrow_key == ARROW_UP || arrow_key == ARROW_DOWN) {
         int delta = arrow_key == ARROW_UP ? -1 : 1;
         cursor_move_vertical(&editor->cursor, &editor->root, delta);
@@ -165,6 +196,9 @@ void render(Editor *editor) {
 
     size_t total_lines = rope_total_newlines(&editor->root);
 
+    size_t sel_start = min_size(editor->cursor.offset, editor->selection.anchor_offset);
+    size_t sel_end   = max_size(editor->cursor.offset, editor->selection.anchor_offset);
+
     for (size_t i = 0; i < _visible_rows; i++) {
         size_t line = i + editor->line_offset;
         if (line > total_lines) break;
@@ -174,14 +208,29 @@ void render(Editor *editor) {
         size_t line_start = rope_offset_of_line_start(&editor->root, line);
         size_t line_end = line >= total_lines ? editor->root.weight : rope_offset_of_line_start(&editor->root, line + 1) - 1;
 
+        size_t overlap_start = max_size(line_start, sel_start);
+        size_t overlap_end   = min_size(line_end, sel_end);
+
+        size_t local_start = overlap_start - line_start;
+        size_t local_end   = overlap_end   - line_start;
+
         buf_len = 0;
         rope_collect_between(&editor->root, line_start, line_end, &print_buf, &buf_len, &buf_cap);
         Renderer_print_line_number(line + 1);
 
-        Renderer_print_buf(print_buf, buf_len);
+        if (overlap_start >= overlap_end || !editor->selection.active) {
+            Renderer_print_buf(print_buf, buf_len);
+            continue;
+        }
+
+        Renderer_print_buf(print_buf, local_start);
+        Renderer_print_buf("\x1b[7m", 4);
+        Renderer_print_buf(print_buf + local_start, local_end - local_start);
+        Renderer_print_buf("\x1b[0m", 4);
+        Renderer_print_buf(print_buf + local_end, buf_len - local_end);
     }
     
-    print_cursor_debug(editor);
+    // print_cursor_debug(editor);
     Renderer_print_cursor(&editor->cursor, editor->line_offset, _visible_rows);
 }
 
@@ -220,6 +269,8 @@ int main(int argc, char** argv) {
             editor.cursor.goal_column = editor.cursor.column;
             scroll_to_cursor(&editor.cursor, &editor.line_offset, &editor.ws);
             editor.status_bar.dirty = 1;
+            editor.selection.active = 0;
+            editor.selection.via_toggle = 0;
 
             render(&editor);
             continue;
@@ -245,8 +296,16 @@ int main(int argc, char** argv) {
                 editor.status_bar.prompt_len = 0;
                 break;
             case BACKSPACE:
-                cursor_backspace(&editor.cursor, &editor.root);
+                if (editor.selection.active) {
+                    size_t start = min_size(editor.cursor.offset, editor.selection.anchor_offset);
+                    size_t end   = max_size(editor.cursor.offset, editor.selection.anchor_offset);
+                    cursor_delete_section(&editor.cursor, &editor.root, start, end);
+                } else {
+                    cursor_backspace(&editor.cursor, &editor.root);
+                }
                 editor.status_bar.dirty = 1;
+                editor.selection.active = 0;
+                editor.selection.via_toggle = 0;
                 break;
             case ARROW_UP:
             case ARROW_DOWN:
@@ -267,8 +326,34 @@ int main(int argc, char** argv) {
 
                 cursor_set_position(&editor.cursor, &editor.root, target_row, target_col);
                 scroll_to_cursor(&editor.cursor, &editor.line_offset, &editor.ws);
+
+                editor.selection.anchor_offset = editor.cursor.offset;
+                editor.selection.active = 0;
+                editor.selection.via_toggle = 0;
                 break;
             }
+            case MOUSE_DRAG: {
+                size_t target_row = (event.click_row - 1) + editor.line_offset - 1;
+                int target_col_raw = ((int) event.click_col - 1) - LEFT_MARGIN;
+                size_t target_col = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
+
+                cursor_set_position(&editor.cursor, &editor.root, target_row, target_col);
+                scroll_to_cursor(&editor.cursor, &editor.line_offset, &editor.ws);
+
+                editor.selection.active = 1;
+                break;
+            }
+            case TOGGLE_SELECT:
+                if (editor.selection.via_toggle) {
+                    editor.selection.active = 0;
+                    editor.selection.via_toggle = 0;
+                    break;
+                }
+                
+                if (!editor.selection.active) editor.selection.anchor_offset = editor.cursor.offset;
+                editor.selection.active = 1;
+                editor.selection.via_toggle = 1;
+                break;
         }
 
         render(&editor);

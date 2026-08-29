@@ -18,6 +18,7 @@ void cursor_get_row_col(Cursor* cursor, RopeNode *rope);
 void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta);
 void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta);
 void cursor_backspace(Cursor *cursor, RopeNode *rope);
+void cursor_delete_section(Cursor *cursor, RopeNode *rope, size_t start, size_t end);
 void cursor_set_position(Cursor *cursor, RopeNode *rope, size_t target_row, size_t target_col);
 
 size_t move_forward_utf8(RopeNode *rope, size_t offset);
