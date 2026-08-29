@@ -28,7 +28,10 @@ enum editorKey {
     MOUSE_DRAG,
     MOUSE_RELEASE,
     TOGGLE_SELECT,
-    FORWARD_DELETE
+    FORWARD_DELETE,
+    COPY,
+    CUT,
+    PASTE
 };
 
 typedef enum {

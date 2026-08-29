@@ -109,7 +109,11 @@ void rope_insert(RopeNode* root, int idx, const char* str, size_t str_len) {
         // Base case, do the insertion
         if (root->weight + str_len >= LEAF_MAX_SIZE) {
             rope_split_node(root);
-            return rope_insert(root, idx, str, str_len);
+            size_t new_len = LEAF_MAX_SIZE - root->weight - 1;
+            if (new_len > str_len) new_len = str_len;
+
+            rope_insert(root, idx, str, new_len);
+            return rope_insert(root, idx + new_len, str + new_len, str_len - new_len);
         }
 
         safe_insert(&root->str, &root->weight, str, str_len, idx);

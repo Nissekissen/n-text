@@ -30,6 +30,10 @@ typedef struct {
     struct winsize ws;
     StatusBar status_bar;
     Selection selection;
+
+    char *clipboard;
+    size_t clipboard_len;
+    size_t clipboard_cap;
 } Editor;
 
 static inline size_t max_size(size_t a, size_t b) { return a > b ? a : b; }
@@ -102,18 +106,7 @@ void load_file(Editor *editor, char *path) {
 
     close(fd);
 
-    // Chunk size must stay well under LEAF_MAX_SIZE / 2: rope_insert only
-    // ever performs one split per retry, and a single split roughly halves
-    // a full leaf's existing content — a chunk close to LEAF_MAX_SIZE won't
-    // fit after just one split, and splitting again never shrinks str_len,
-    // so it recurses forever instead of converging.
-    size_t chunk_start = 0;
-    while (chunk_start < size) {
-        size_t max_chunk = LEAF_MAX_SIZE / 4;
-        size_t chunk_size = (size - chunk_start) >= max_chunk ? max_chunk : (size - chunk_start);
-        rope_insert(&editor->root, chunk_start, buf + chunk_start, chunk_size);
-        chunk_start += chunk_size;
-    }
+    rope_insert(&editor->root, 0, buf, size);
 
     free(buf);
 }
@@ -165,6 +158,17 @@ void handle_prompt_mode(Editor *editor, InputEvent event) {
             editor->status_bar.mode = MODE_NORMAL;
             break;
     }
+}
+
+void editor_insert_text(Editor *editor, char *buf, size_t len) {
+    rope_insert(&editor->root, editor->cursor.offset, buf, len);
+
+    editor->cursor.offset += len;
+    cursor_get_row_col(&editor->cursor, &editor->root);
+    editor->cursor.goal_column = editor->cursor.column;
+    scroll_to_cursor(&editor->cursor, &editor->line_offset, &editor->ws);
+
+    editor->status_bar.dirty = 1;
 }
 
 void render(Editor *editor) {
@@ -236,7 +240,7 @@ void render(Editor *editor) {
 
 int main(int argc, char** argv) {
     Editor editor = {0};
-    
+
     editor.filename = argv[1];
     if (argc < 2) editor.filename = NULL;
 
@@ -246,7 +250,6 @@ int main(int argc, char** argv) {
     cursor_init(&editor.cursor);
     editor.status_bar.mode = MODE_NORMAL;
     editor.status_bar.dirty = 0;
-
 
     Renderer_Init();
 
@@ -263,12 +266,7 @@ int main(int argc, char** argv) {
         }
 
         if (event.byte_count > 0) {
-            rope_insert(&editor.root, editor.cursor.offset, event.bytes, event.byte_count);
-            editor.cursor.offset += event.byte_count;
-            cursor_get_row_col(&editor.cursor, &editor.root);
-            editor.cursor.goal_column = editor.cursor.column;
-            scroll_to_cursor(&editor.cursor, &editor.line_offset, &editor.ws);
-            editor.status_bar.dirty = 1;
+            editor_insert_text(&editor, event.bytes, event.byte_count);
             editor.selection.active = 0;
             editor.selection.via_toggle = 0;
 
@@ -313,6 +311,43 @@ int main(int argc, char** argv) {
                 editor.selection.active = 0;
                 editor.selection.via_toggle = 0;
                 break;
+            case CUT: {
+                if (!editor.selection.active) break;
+                size_t sel_start = min_size(editor.cursor.offset, editor.selection.anchor_offset);
+                size_t sel_end   = max_size(editor.cursor.offset, editor.selection.anchor_offset);
+
+                editor.clipboard_len = 0;
+                rope_collect_between(&editor.root, sel_start, sel_end, &editor.clipboard, &editor.clipboard_len, &editor.clipboard_cap);
+                cursor_delete_section(&editor.cursor, &editor.root, sel_start, sel_end);
+
+                editor.selection.active = 0;
+                editor.selection.via_toggle = 0;
+                editor.status_bar.dirty = 1;
+                break;
+            }
+            case COPY: {
+                if (!editor.selection.active) break;
+                size_t sel_start = min_size(editor.cursor.offset, editor.selection.anchor_offset);
+                size_t sel_end   = max_size(editor.cursor.offset, editor.selection.anchor_offset);
+
+                editor.clipboard_len = 0;
+                rope_collect_between(&editor.root, sel_start, sel_end, &editor.clipboard, &editor.clipboard_len, &editor.clipboard_cap);
+                break;
+            }
+            case PASTE: {
+                if (editor.clipboard_len == 0) break;
+                if (editor.selection.active) {
+                    size_t sel_start = min_size(editor.cursor.offset, editor.selection.anchor_offset);
+                    size_t sel_end   = max_size(editor.cursor.offset, editor.selection.anchor_offset);
+
+                    cursor_delete_section(&editor.cursor, &editor.root, sel_start, sel_end);
+                    editor.selection.active = 0;
+                    editor.selection.via_toggle = 0;
+                }
+
+                editor_insert_text(&editor, editor.clipboard, editor.clipboard_len);
+                break;
+            }
             case ARROW_UP:
             case ARROW_DOWN:
             case ARROW_LEFT:

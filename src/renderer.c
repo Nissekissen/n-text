@@ -163,11 +163,14 @@ InputEvent read_key(void) {
     
     if (c == '\r') { event.bytes[0] = '\n'; event.byte_count = 1; return event; };
     
-    if (c == CTRL_KEY('s')) { event.keyCode = SAVE; return event; }
-    if (c == CTRL_KEY('S')) { event.keyCode = SAVE_AS; return event; }
-    if (c == CTRL_KEY('q')) { event.keyCode = QUIT; return event; }
+    if (c == CTRL_KEY('s')) { event.keyCode =          SAVE; return event; }
+    if (c == CTRL_KEY('S')) { event.keyCode =       SAVE_AS; return event; }
+    if (c == CTRL_KEY('q')) { event.keyCode =          QUIT; return event; }
     if (c == CTRL_KEY(' ')) { event.keyCode = TOGGLE_SELECT; return event; }
-    if (c == 0x7F) { event.keyCode = BACKSPACE; return event; }
+    if (c == CTRL_KEY('x')) { event.keyCode =           CUT; return event; }
+    if (c == CTRL_KEY('c')) { event.keyCode =          COPY; return event; }
+    if (c == CTRL_KEY('v')) { event.keyCode =         PASTE; return event; }
+    if (c == 0x7F)          { event.keyCode =     BACKSPACE; return event; }
 
     if (c == '\t') {
         for (int i = 0; i < TAB_WIDTH; i++) event.bytes[i] = ' ';
