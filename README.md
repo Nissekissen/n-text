@@ -44,7 +44,7 @@ Note that `cmake --install` copies the binary rather than linking it — if you 
 ## TODO
 
 - [x] Open/save files
-- [ ] Forward delete key (only backspace exists)
+- [x] Forward delete key
 - [x] Tabspace
 - [x] Scrolling for documents taller than the terminal window
 - [x] Text selection

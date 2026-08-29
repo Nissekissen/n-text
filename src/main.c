@@ -206,7 +206,7 @@ void render(Editor *editor) {
         if (i > 0) write(STDOUT_FILENO, "\r\n", 2);
 
         size_t line_start = rope_offset_of_line_start(&editor->root, line);
-        size_t line_end = line >= total_lines ? editor->root.weight : rope_offset_of_line_start(&editor->root, line + 1) - 1;
+        size_t line_end = line >= total_lines ? rope_total_length(&editor->root) : rope_offset_of_line_start(&editor->root, line + 1) - 1;
 
         size_t overlap_start = max_size(line_start, sel_start);
         size_t overlap_end   = min_size(line_end, sel_end);
@@ -295,6 +295,12 @@ int main(int argc, char** argv) {
                 editor.status_bar.mode = MODE_PROMPT_SAVE;
                 editor.status_bar.prompt_len = 0;
                 break;
+            case FORWARD_DELETE:
+                if (!editor.selection.active) {
+                    if (editor.cursor.offset >= rope_total_length(&editor.root)) break;
+                    size_t len = move_forward_utf8(&editor.root, editor.cursor.offset);
+                    editor.cursor.offset += len;
+                }
             case BACKSPACE:
                 if (editor.selection.active) {
                     size_t start = min_size(editor.cursor.offset, editor.selection.anchor_offset);

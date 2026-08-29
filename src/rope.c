@@ -275,6 +275,12 @@ size_t rope_total_newlines(RopeNode *node) {
     return node->newlines + rope_total_newlines(node->right);
 }
 
+size_t rope_total_length(RopeNode *node) {
+    if (node->str != NULL) return node->weight;
+    
+    return node->weight + rope_total_length(node->right);
+}
+
 void safe_append(char** buf, size_t* buf_len, size_t* buf_cap, const char* str, size_t str_len) {
     if (*buf_len + str_len > *buf_cap) {
         size_t new_cap = *buf_len + str_len;

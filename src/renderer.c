@@ -218,6 +218,11 @@ InputEvent read_key(void) {
             return event;
         }
 
+        if (parse_value.parameterCount >= 1 && parse_value.parameters[0] == 3 && parse_value.finalChar == '~') { // Forward delete key
+            event.keyCode = FORWARD_DELETE;
+            return event;
+        }
+
         event.keyCode = ESC;
         return event;
     }
