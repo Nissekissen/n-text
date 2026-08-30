@@ -66,6 +66,8 @@ void Renderer_move_right(size_t chars);
 void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
 void Renderer_print_cursor(Cursor* cursor, size_t line_offset, size_t visible_rows);
+void Renderer_set_clipboard(const char *data, size_t len);
+char *Renderer_get_clipboard(void);
 
 void scroll_to_cursor(Cursor *cursor, size_t *line_offset, struct winsize *ws);
 
@@ -79,5 +81,6 @@ int read_ascii_number(unsigned char *c);
 CSI_Parser_return csi_parse();
 InputEvent read_key(void);
 int utf8_seq_len(unsigned char lead);
+char *base64_encode(const unsigned char *data, size_t input_length, size_t *output_length);
 
 void clear_screen(void);

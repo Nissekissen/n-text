@@ -329,6 +329,7 @@ int main(int argc, char** argv) {
 
                 editor.clipboard_len = 0;
                 rope_collect_between(&editor.root, sel_start, sel_end, &editor.clipboard, &editor.clipboard_len, &editor.clipboard_cap);
+                Renderer_set_clipboard(editor.clipboard, editor.clipboard_len);
                 cursor_delete_section(&editor.cursor, &editor.root, sel_start, sel_end);
 
                 editor.selection.active = 0;
@@ -343,6 +344,7 @@ int main(int argc, char** argv) {
 
                 editor.clipboard_len = 0;
                 rope_collect_between(&editor.root, sel_start, sel_end, &editor.clipboard, &editor.clipboard_len, &editor.clipboard_cap);
+                Renderer_set_clipboard(editor.clipboard, editor.clipboard_len);
                 break;
             }
             case PASTE: {
@@ -354,6 +356,12 @@ int main(int argc, char** argv) {
                     cursor_delete_section(&editor.cursor, &editor.root, sel_start, sel_end);
                     editor.selection.active = 0;
                     editor.selection.via_toggle = 0;
+                }
+
+                char *os_clipboard = Renderer_get_clipboard();
+                if (os_clipboard != NULL) {
+                    editor.clipboard_len = 0;
+                    safe_append(&editor.clipboard, &editor.clipboard_len, &editor.clipboard_cap, os_clipboard, strlen(os_clipboard));
                 }
 
                 editor_insert_text(&editor, editor.clipboard, editor.clipboard_len);

@@ -48,6 +48,6 @@ ntxt file.txt
 - [x] Text selection
 - [ ] Undo/redo
 - [x] Show line numbers
-- [ ] Copy/paste
+- [x] Copy/paste
 - [x] Goal column when moving cursor
 - [ ] Rendering bug when line overflows

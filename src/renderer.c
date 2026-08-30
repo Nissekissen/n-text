@@ -9,6 +9,17 @@
 
 struct termios orig_termos;
 
+static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+                                'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+                                'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+                                'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+                                'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+                                'w', 'x', 'y', 'z', '0', '1', '2', '3',
+                                '4', '5', '6', '7', '8', '9', '+', '/'};
+static char *decoding_table = NULL;
+static int mod_table[] = {0, 2, 1};
+
 void Renderer_Init(void) {
 
     write(STDOUT_FILENO, "\x1b[?1049h", 8); // Enter alt screen
@@ -102,6 +113,61 @@ void Renderer_move_right(size_t chars) {
     char buf[8];
     int len = snprintf(buf, sizeof(buf), "\x1b[%zuC", chars);
     write(STDOUT_FILENO, buf, len);
+}
+
+void Renderer_set_clipboard(const char *data, size_t len) {   
+#ifdef __APPLE__
+    FILE *pipe = popen("pbcopy", "w");
+    if (pipe) {
+        fwrite(data, 1, len, pipe);
+        pclose(pipe);
+    }
+#else
+    size_t base64_len = 0;
+    char *base64_data = base64_encode((const unsigned char*)data, len, &base64_len);
+    
+    char *buf = malloc(base64_len + 20);
+    size_t buf_len = snprintf(
+            buf,
+            base64_len + 20,
+            "\033]52;c;%s\a",
+            base64_data);
+    
+    write(STDOUT_FILENO, buf, buf_len);
+
+    free(buf);
+    free(base64_data);
+#endif
+}
+
+char *Renderer_get_clipboard(void) {
+#ifdef __APPLE__
+    FILE *pipe = popen("pbpaste", "r");
+    if (!pipe) return NULL;
+
+    char *buf = NULL;
+    size_t buf_len = 0, buf_cap = 0;
+
+    char chunk[4096];
+    size_t n;
+
+    while ((n = fread(chunk, 1, sizeof(chunk), pipe)) > 0) {
+        safe_append(&buf, &buf_len, &buf_cap, chunk, n);
+    }
+
+    int status = pclose(pipe);
+
+    if (status != 0) {
+        free(buf);
+        return NULL;
+    }
+
+    safe_append(&buf, &buf_len, &buf_cap, "", 1);
+
+    return buf;
+#else
+    return NULL;
+#endif
 }
 
 void die(const char *s) {
@@ -327,3 +393,30 @@ int utf8_seq_len(unsigned char lead) {
     return 1;
 }
 
+char* base64_encode(const unsigned char *data, size_t input_length, size_t *output_length) {
+    *output_length = 4 * ((input_length + 2) / 3);
+
+    char *encoded_data = malloc(*output_length + 1);
+    if (encoded_data == NULL) return NULL;
+    
+    for (int i = 0, j = 0; i < input_length;) {
+
+        uint32_t octet_a = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_b = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_c = i < input_length ? (unsigned char)data[i++] : 0;
+
+        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+
+        encoded_data[j++] = encoding_table[(triple >> 3 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 2 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 1 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 0 * 6) & 0x3F];
+    }
+
+    for (int i = 0; i < mod_table[input_length % 3]; i++)
+        encoded_data[*output_length - 1 - i] = '=';
+
+    encoded_data[*output_length] = '\0';
+
+    return encoded_data;
+}
