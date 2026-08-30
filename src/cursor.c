@@ -85,6 +85,10 @@ void cursor_delete_section(Cursor *cursor, RopeNode *rope, size_t start, size_t 
     cursor->goal_column = cursor->column;
 }
 
+size_t cursor_segment(Cursor *cursor, size_t visible_width) {
+    return cursor->column / visible_width;
+}
+
 void cursor_set_position(Cursor *cursor, RopeNode *rope, size_t target_row, size_t target_col) {
     size_t total_lines = rope_total_newlines(rope);
     if (target_row > total_lines) target_row = total_lines;

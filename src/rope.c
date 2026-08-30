@@ -273,6 +273,22 @@ size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines) {
     return rope_count_chars_between(root, start, next_start - 1);
 }
 
+size_t rope_segment_count(RopeNode *root, size_t line, size_t visible_width, size_t total_lines) {
+    size_t line_length = rope_line_length(root, line, total_lines);
+    return max_size((line_length + visible_width - 1) / visible_width, 1);
+}
+
+size_t rope_segment_count_between(RopeNode *root, size_t from, size_t to, size_t visible_width) {
+    size_t total_lines = rope_total_newlines(root);
+    
+    size_t length = 0;
+    for (size_t line = from; line < to; line++) {
+        length += rope_segment_count(root, line, visible_width, total_lines);
+    }
+
+    return length;
+}
+
 size_t rope_total_newlines(RopeNode *node) {
     if (node->str != NULL) return node->newlines;
 

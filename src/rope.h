@@ -22,6 +22,9 @@ typedef struct {
     size_t capacity;
 } Stack;
 
+static inline size_t max_size(size_t a, size_t b) { return a > b ? a : b; }
+static inline size_t min_size(size_t a, size_t b) { return a < b ? a : b; }
+
 void rope_init(RopeNode* root);
 void rope_collect(RopeNode* root, char** buf, size_t* buf_len, size_t* buf_cap);
 void rope_collect_iter(RopeNode* root, Stack* stack, char** buf, size_t* buf_len, size_t* buf_cap);
@@ -38,6 +41,8 @@ size_t rope_offset_of_line_start(RopeNode *root, size_t line);
 size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines);
 size_t rope_total_newlines(RopeNode *node);
 size_t rope_total_length(RopeNode *node);
+size_t rope_segment_count(RopeNode *root, size_t line, size_t visible_width, size_t total_lines);
+size_t rope_segment_count_between(RopeNode *root, size_t from, size_t to, size_t visible_width);
 
 void safe_append(char **buf, size_t* buf_len, size_t* buf_cap, const char* str, size_t str_len);
 void safe_insert(char **buf, uint16_t* buf_len, const char* str, size_t str_len, int offset);

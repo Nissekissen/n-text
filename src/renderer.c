@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/select.h>
 
 
 struct termios orig_termos;
@@ -17,7 +18,6 @@ static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                                 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
                                 'w', 'x', 'y', 'z', '0', '1', '2', '3',
                                 '4', '5', '6', '7', '8', '9', '+', '/'};
-static char *decoding_table = NULL;
 static int mod_table[] = {0, 2, 1};
 
 void Renderer_Init(void) {
@@ -100,13 +100,15 @@ void Renderer_print_buf(char* buf, size_t buf_len) {
     }
 }
 
-void Renderer_print_cursor(Cursor *cursor, size_t line_offset, size_t visible_rows) {
-    if (cursor->row < line_offset || cursor->row >= line_offset + visible_rows) {
+void Renderer_print_cursor(Cursor *cursor, RopeNode *root, size_t line_offset, size_t visible_rows, size_t visible_width) {
+    size_t cursor_visual_row = rope_segment_count_between(root, line_offset, cursor->row, visible_width) + cursor_segment(cursor, visible_width);
+
+    if (cursor->row < line_offset || cursor_visual_row >= visible_rows) {
         write(STDOUT_FILENO, "\x1b[?25l", 6); // hide cursor, it's scrolled out of view
         return;
     }
     write(STDOUT_FILENO, "\x1b[?25h", 6); // ensure visible
-    Renderer_move_to((int) (cursor->row - line_offset) + 1 + 1, (int) cursor->column + 1 + LEFT_MARGIN);
+    Renderer_move_to((int) (cursor_visual_row) + 1 + 1, (int) (cursor->column % visible_width) + 1 + LEFT_MARGIN);
 }
 
 void Renderer_move_right(size_t chars) {
@@ -209,9 +211,18 @@ void normalize_line_endings(InputEvent *event) {
     event->paste_len = w;
 }
 
-void scroll_to_cursor(Cursor *cursor, size_t *line_offset, struct winsize *ws) {
+void scroll_to_cursor(Cursor *cursor, RopeNode *root, size_t *line_offset, size_t visible_rows, size_t visible_width) {
     if (cursor->row < *line_offset) *line_offset = cursor->row; // Scroll up
-    if (cursor->row >= *line_offset + ws->ws_row) *line_offset = cursor->row - ws->ws_row + 1; // Scroll down
+
+    if (cursor->row >= *line_offset + visible_rows) {
+        // *line_offset = cursor->row - ws->ws_row + 1; // Scroll down
+        size_t cursor_visual_row = 0;
+
+        do {
+            cursor_visual_row = rope_segment_count_between(root, *line_offset, cursor->row, visible_width) + cursor_segment(cursor, visible_width);
+            (*line_offset)++;
+        } while (cursor_visual_row >= visible_rows);
+    }
 }
 
 int read_ascii_number(unsigned char *c) {
@@ -264,6 +275,16 @@ InputEvent read_key(void) {
     }
 
     if (c == '\x1b') {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(STDIN_FILENO, &readfds);
+
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 50000; // 50 ms
+        
+        int ready = select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
+        if (ready == 0) { event.keyCode = ESC; return event; }
 
         char bracketHopefully;
         if (read(STDIN_FILENO, &bracketHopefully, 1) != 1) { event.keyCode = ESC; return event; }

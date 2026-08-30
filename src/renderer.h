@@ -65,11 +65,11 @@ void Renderer_move_to(int row, int col);
 void Renderer_move_right(size_t chars);
 void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
-void Renderer_print_cursor(Cursor* cursor, size_t line_offset, size_t visible_rows);
+void Renderer_print_cursor(Cursor* cursor, RopeNode *root, size_t line_offset, size_t visible_rows, size_t visible_width);
 void Renderer_set_clipboard(const char *data, size_t len);
 char *Renderer_get_clipboard(void);
 
-void scroll_to_cursor(Cursor *cursor, size_t *line_offset, struct winsize *ws);
+void scroll_to_cursor(Cursor *cursor, RopeNode *root, size_t *line_offset, size_t visible_rows, size_t visible_width);
 
 void die(const char* s);
 // Private methods

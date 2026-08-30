@@ -36,9 +36,6 @@ typedef struct {
     size_t clipboard_cap;
 } Editor;
 
-static inline size_t max_size(size_t a, size_t b) { return a > b ? a : b; }
-static inline size_t min_size(size_t a, size_t b) { return a < b ? a : b; }
-
 int visible_rows(Editor *editor) {
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &editor->ws);
     return editor->ws.ws_row - 1;
@@ -129,7 +126,7 @@ void handle_arrow_keys(Editor *editor, int arrow_key, int shift) {
         cursor_move_horisontal(&editor->cursor, &editor->root, delta);
     }
 
-    scroll_to_cursor(&editor->cursor, &editor->line_offset, &editor->ws);
+    scroll_to_cursor(&editor->cursor, &editor->root, &editor->line_offset, visible_rows(editor), editor->ws.ws_col - LEFT_MARGIN);
 }
 
 void handle_prompt_mode(Editor *editor, InputEvent event) {
@@ -166,9 +163,17 @@ void editor_insert_text(Editor *editor, char *buf, size_t len) {
     editor->cursor.offset += len;
     cursor_get_row_col(&editor->cursor, &editor->root);
     editor->cursor.goal_column = editor->cursor.column;
-    scroll_to_cursor(&editor->cursor, &editor->line_offset, &editor->ws);
+    scroll_to_cursor(&editor->cursor, &editor->root, &editor->line_offset, visible_rows(editor), editor->ws.ws_col - LEFT_MARGIN);
 
     editor->status_bar.dirty = 1;
+}
+
+void print_with_highlight(char *buf, size_t len, size_t start, size_t end) {
+    Renderer_print_buf(buf, start);
+    Renderer_print_buf("\x1b[7m", 4);
+    Renderer_print_buf(buf + start, end - start);
+    Renderer_print_buf("\x1b[0m", 4);
+    Renderer_print_buf(buf + end, len - end);
 }
 
 void render(Editor *editor) {
@@ -202,12 +207,16 @@ void render(Editor *editor) {
 
     size_t sel_start = min_size(editor->cursor.offset, editor->selection.anchor_offset);
     size_t sel_end   = max_size(editor->cursor.offset, editor->selection.anchor_offset);
+    
+    size_t visible_width = editor->ws.ws_col - LEFT_MARGIN;
 
-    for (size_t i = 0; i < _visible_rows; i++) {
-        size_t line = i + editor->line_offset;
+    size_t line = editor->line_offset;
+    size_t rows_printed = 0;
+    
+    int _break = 0;
+
+    while (rows_printed < _visible_rows) {
         if (line > total_lines) break;
-
-        if (i > 0) write(STDOUT_FILENO, "\r\n", 2);
 
         size_t line_start = rope_offset_of_line_start(&editor->root, line);
         size_t line_end = line >= total_lines ? rope_total_length(&editor->root) : rope_offset_of_line_start(&editor->root, line + 1) - 1;
@@ -220,22 +229,52 @@ void render(Editor *editor) {
 
         buf_len = 0;
         rope_collect_between(&editor->root, line_start, line_end, &print_buf, &buf_len, &buf_cap);
-        Renderer_print_line_number(line + 1);
 
-        if (overlap_start >= overlap_end || !editor->selection.active) {
-            Renderer_print_buf(print_buf, buf_len);
-            continue;
+        size_t byte_pos = 0;
+
+        size_t segment_count = rope_segment_count(&editor->root, line, visible_width, total_lines);
+        for (size_t seg = 0; seg < segment_count; seg++) {
+            if (rows_printed >= _visible_rows) { _break = 1; break; }
+            if (rows_printed > 0) write(STDOUT_FILENO, "\r\n", 2);
+            
+            size_t seg_start = byte_pos;
+
+            for (size_t i = 0; i < visible_width; i++) {
+                if (byte_pos >= buf_len) break;
+                byte_pos += utf8_seq_len(print_buf[byte_pos]);
+            }
+
+            size_t seg_end = byte_pos;
+
+            size_t seg_overlap_start = max_size(seg_start, local_start);
+            size_t seg_overlap_end   = min_size(seg_end, local_end);
+
+            if (seg == 0)
+                Renderer_print_line_number(line + 1);
+            else
+                Renderer_move_right(LEFT_MARGIN);
+
+            if (seg_overlap_start >= seg_overlap_end || !editor->selection.active) {
+                Renderer_print_buf(print_buf + seg_start, seg_end - seg_start);
+                rows_printed++;
+                continue;
+            }
+
+            size_t seg_hl_start = seg_overlap_start - seg_start;
+            size_t seg_hl_end   = seg_overlap_end   - seg_start;
+
+            print_with_highlight(print_buf + seg_start, seg_end - seg_start, seg_hl_start, seg_hl_end);
+
+            rows_printed++;
         }
 
-        Renderer_print_buf(print_buf, local_start);
-        Renderer_print_buf("\x1b[7m", 4);
-        Renderer_print_buf(print_buf + local_start, local_end - local_start);
-        Renderer_print_buf("\x1b[0m", 4);
-        Renderer_print_buf(print_buf + local_end, buf_len - local_end);
+        line++;
+
+        if (_break) break;
     }
-    
+
     // print_cursor_debug(editor);
-    Renderer_print_cursor(&editor->cursor, editor->line_offset, _visible_rows);
+    Renderer_print_cursor(&editor->cursor, &editor->root, editor->line_offset, _visible_rows, visible_width);
 }
 
 int main(int argc, char** argv) {
@@ -385,7 +424,7 @@ int main(int argc, char** argv) {
                 size_t target_col = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
 
                 cursor_set_position(&editor.cursor, &editor.root, target_row, target_col);
-                scroll_to_cursor(&editor.cursor, &editor.line_offset, &editor.ws);
+                scroll_to_cursor(&editor.cursor, &editor.root, &editor.line_offset, visible_rows(&editor), editor.ws.ws_col - LEFT_MARGIN);
 
                 editor.selection.anchor_offset = editor.cursor.offset;
                 editor.selection.active = 0;
@@ -398,7 +437,7 @@ int main(int argc, char** argv) {
                 size_t target_col = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
 
                 cursor_set_position(&editor.cursor, &editor.root, target_row, target_col);
-                scroll_to_cursor(&editor.cursor, &editor.line_offset, &editor.ws);
+                scroll_to_cursor(&editor.cursor, &editor.root, &editor.line_offset, visible_rows(&editor), editor.ws.ws_col - LEFT_MARGIN);
 
                 editor.selection.active = 1;
                 break;
