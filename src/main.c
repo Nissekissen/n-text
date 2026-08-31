@@ -419,11 +419,15 @@ int main(int argc, char** argv) {
                 if (editor.line_offset < total_newlines) editor.line_offset++;
                 break;
             case MOUSE_CLICK: {
-                size_t target_row = (event.click_row - 1) + editor.line_offset - 1;
+                size_t visible_width = editor.ws.ws_col - LEFT_MARGIN;
+                size_t target_visual_row = event.click_row - 2;
+                LineSegment loc = rope_line_of_visual_row(&editor.root, editor.line_offset, target_visual_row, editor.ws.ws_col - LEFT_MARGIN, total_newlines);
                 int target_col_raw = ((int) event.click_col - 1) - LEFT_MARGIN;
-                size_t target_col = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
+                target_col_raw = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
 
-                cursor_set_position(&editor.cursor, &editor.root, target_row, target_col);
+                size_t target_col = loc.segment * visible_width + target_col_raw;
+
+                cursor_set_position(&editor.cursor, &editor.root, loc.line, target_col);
                 scroll_to_cursor(&editor.cursor, &editor.root, &editor.line_offset, visible_rows(&editor), editor.ws.ws_col - LEFT_MARGIN);
 
                 editor.selection.anchor_offset = editor.cursor.offset;

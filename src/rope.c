@@ -301,6 +301,25 @@ size_t rope_total_length(RopeNode *node) {
     return node->weight + rope_total_length(node->right);
 }
 
+LineSegment rope_line_of_visual_row(RopeNode *root, size_t from_line, size_t target_row, size_t visible_width, size_t total_lines) {
+    size_t line = from_line;
+    size_t remaining = target_row;
+    
+    size_t segment_count = rope_segment_count(root, line, visible_width, total_lines);
+    while (remaining >= segment_count) {
+        if (line > total_lines) break;
+        remaining -= segment_count;
+        line++;
+
+        segment_count = rope_segment_count(root, line, visible_width, total_lines);
+    }
+
+    LineSegment return_val;
+    return_val.line = line;
+    return_val.segment = remaining;
+    return return_val;
+}
+
 void safe_append(char** buf, size_t* buf_len, size_t* buf_cap, const char* str, size_t str_len) {
     if (*buf_len + str_len > *buf_cap) {
         size_t new_cap = *buf_len + str_len;

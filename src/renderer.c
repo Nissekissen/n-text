@@ -212,16 +212,17 @@ void normalize_line_endings(InputEvent *event) {
 }
 
 void scroll_to_cursor(Cursor *cursor, RopeNode *root, size_t *line_offset, size_t visible_rows, size_t visible_width) {
+    size_t cursor_visual_row = rope_segment_count_between(root, *line_offset, cursor->row, visible_width) + cursor_segment(cursor, visible_width);
     if (cursor->row < *line_offset) *line_offset = cursor->row; // Scroll up
 
-    if (cursor->row >= *line_offset + visible_rows) {
+    if (cursor_visual_row >= visible_rows) {
         // *line_offset = cursor->row - ws->ws_row + 1; // Scroll down
-        size_t cursor_visual_row = 0;
-
-        do {
+        
+        while (1) {
             cursor_visual_row = rope_segment_count_between(root, *line_offset, cursor->row, visible_width) + cursor_segment(cursor, visible_width);
+            if (cursor_visual_row < visible_rows) break;
             (*line_offset)++;
-        } while (cursor_visual_row >= visible_rows);
+        }
     }
 }
 
