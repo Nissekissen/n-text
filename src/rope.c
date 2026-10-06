@@ -2,7 +2,7 @@
 #include <string.h>
 #include "renderer.h"
 
-void rope_init(RopeNode* root) {
+void rope_init(rope_node_t* root) {
     root->left = NULL;
     root->right = NULL;
     root->weight = 0;
@@ -10,11 +10,11 @@ void rope_init(RopeNode* root) {
     root->str = malloc(LEAF_MAX_SIZE);
 }
 
-void rope_collect(RopeNode* root, char** buf, size_t* buf_len, size_t* buf_cap) {
-    Stack stack;
+void rope_collect(rope_node_t* root, char** buf, size_t* buf_len, size_t* buf_cap) {
+    rope_stack_t stack;
     stack_init(&stack);
 
-    RopeNode *node = root;
+    rope_node_t *node = root;
     while (node != NULL) {
         stack_push(&stack, *node);
         node = node->left;
@@ -31,17 +31,17 @@ void rope_collect(RopeNode* root, char** buf, size_t* buf_len, size_t* buf_cap) 
     free(stack.data);
 }
 
-void rope_collect_iter(RopeNode* root, Stack* stack, char** buf, size_t* buf_len, size_t* buf_cap) {
+void rope_collect_iter(rope_node_t* root, rope_stack_t* stack, char** buf, size_t* buf_len, size_t* buf_cap) {
     if (stack->size == 0) { return; }
 
-    RopeNode* result = root;
-    RopeNode current = stack_pop(stack);
+    rope_node_t* result = root;
+    rope_node_t current = stack_pop(stack);
 
-    RopeNode* right = current.right;
+    rope_node_t* right = current.right;
     if (right != NULL) {
         stack_push(stack, *right);
     
-        RopeNode *node = right->left;
+        rope_node_t *node = right->left;
         while (node != NULL) {
             stack_push(stack, *node);
             node = node->left;
@@ -56,7 +56,7 @@ void rope_collect_iter(RopeNode* root, Stack* stack, char** buf, size_t* buf_len
     rope_collect_iter(root, stack, buf, buf_len, buf_cap);
 }
 
-void rope_collect_between(RopeNode* node, size_t from, size_t to, char** buf, size_t* buf_len, size_t* buf_cap) {
+void rope_collect_between(rope_node_t* node, size_t from, size_t to, char** buf, size_t* buf_len, size_t* buf_cap) {
     if (node == NULL || from >= to) return;
 
     if (node->str != NULL) {
@@ -79,7 +79,7 @@ void rope_collect_between(RopeNode* node, size_t from, size_t to, char** buf, si
     }
 }
 
-size_t rope_count_chars_between(RopeNode* node, size_t from, size_t to) {
+size_t rope_count_chars_between(rope_node_t* node, size_t from, size_t to) {
     if (node == NULL || from >= to) return 0;
 
     if (node->str != NULL) {
@@ -103,7 +103,7 @@ size_t rope_count_chars_between(RopeNode* node, size_t from, size_t to) {
     return count;
 }
 
-void rope_insert(RopeNode* root, int idx, const char* str, size_t str_len) {
+void rope_insert(rope_node_t* root, int idx, const char* str, size_t str_len) {
     // Insert a string at the start of idx
     if (root->str != NULL) {
         // Base case, do the insertion
@@ -131,7 +131,7 @@ void rope_insert(RopeNode* root, int idx, const char* str, size_t str_len) {
     root->newlines += count_newlines(str, str_len);
 }
 
-void rope_delete(RopeNode* root, int idx, size_t len) {
+void rope_delete(rope_node_t* root, int idx, size_t len) {
     if (len == 0) return;
 
     if (root->str != NULL) {
@@ -169,7 +169,7 @@ void rope_delete(RopeNode* root, int idx, size_t len) {
     }
 }
 
-RopeNode* rope_index(RopeNode* node, int startIndex) {
+rope_node_t* rope_index(rope_node_t* node, int startIndex) {
     if (node->str != NULL) {
         return node;
     }
@@ -181,12 +181,12 @@ RopeNode* rope_index(RopeNode* node, int startIndex) {
     return rope_index(node->left, startIndex);
 }
 
-void rope_split_node(RopeNode* node) {
+void rope_split_node(rope_node_t* node) {
     // Create new nodes left and right and link them to the node. Split the string in half and put each half in the new leaf nodes. Return if not a leaf node
     if (node->str == NULL) { return; }
 
-    RopeNode *left = malloc(sizeof(RopeNode));
-    RopeNode *right = malloc(sizeof(RopeNode));
+    rope_node_t *left = malloc(sizeof(rope_node_t));
+    rope_node_t *right = malloc(sizeof(rope_node_t));
 
     rope_init(left);
     rope_init(right);
@@ -214,7 +214,7 @@ void rope_split_node(RopeNode* node) {
     node->newlines = left->newlines;
 }
 
-size_t rope_line_of_offset(RopeNode *node, size_t offset) {
+size_t rope_line_of_offset(rope_node_t *node, size_t offset) {
     size_t line = 0;
     while (node->str == NULL) {
         if (offset < node->left->weight) {
@@ -234,7 +234,7 @@ size_t rope_line_of_offset(RopeNode *node, size_t offset) {
     return line;
 }
 
-size_t offset_of_nth_newline(RopeNode *node, size_t n) {
+size_t offset_of_nth_newline(rope_node_t *node, size_t n) {
     size_t offset = 0;
     while (node->str == NULL) {
         if (n < node->left->newlines) {
@@ -260,12 +260,12 @@ size_t offset_of_nth_newline(RopeNode *node, size_t n) {
     return 0;
 }
 
-size_t rope_offset_of_line_start(RopeNode *root, size_t line) {
+size_t rope_offset_of_line_start(rope_node_t *root, size_t line) {
     if (line == 0) return 0;
     return offset_of_nth_newline(root, line - 1) + 1;
 }
 
-size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines) {
+size_t rope_line_length(rope_node_t *root, size_t line, size_t total_lines) {
     size_t start = rope_offset_of_line_start(root, line);
     if (line + 1 > total_lines) return rope_count_chars_between(root, start, root->weight); // Last line, no trailing newline
 
@@ -273,12 +273,12 @@ size_t rope_line_length(RopeNode *root, size_t line, size_t total_lines) {
     return rope_count_chars_between(root, start, next_start - 1);
 }
 
-size_t rope_segment_count(RopeNode *root, size_t line, size_t visible_width, size_t total_lines) {
+size_t rope_segment_count(rope_node_t *root, size_t line, size_t visible_width, size_t total_lines) {
     size_t line_length = rope_line_length(root, line, total_lines);
     return max_size((line_length + visible_width - 1) / visible_width, 1);
 }
 
-size_t rope_segment_count_between(RopeNode *root, size_t from, size_t to, size_t visible_width) {
+size_t rope_segment_count_between(rope_node_t *root, size_t from, size_t to, size_t visible_width) {
     size_t total_lines = rope_total_newlines(root);
     
     size_t length = 0;
@@ -289,19 +289,19 @@ size_t rope_segment_count_between(RopeNode *root, size_t from, size_t to, size_t
     return length;
 }
 
-size_t rope_total_newlines(RopeNode *node) {
+size_t rope_total_newlines(rope_node_t *node) {
     if (node->str != NULL) return node->newlines;
 
     return node->newlines + rope_total_newlines(node->right);
 }
 
-size_t rope_total_length(RopeNode *node) {
+size_t rope_total_length(rope_node_t *node) {
     if (node->str != NULL) return node->weight;
     
     return node->weight + rope_total_length(node->right);
 }
 
-LineSegment rope_line_of_visual_row(RopeNode *root, size_t from_line, size_t target_row, size_t visible_width, size_t total_lines) {
+line_segment_t rope_line_of_visual_row(rope_node_t *root, size_t from_line, size_t target_row, size_t visible_width, size_t total_lines) {
     size_t line = from_line;
     size_t remaining = target_row;
     
@@ -314,7 +314,7 @@ LineSegment rope_line_of_visual_row(RopeNode *root, size_t from_line, size_t tar
         segment_count = rope_segment_count(root, line, visible_width, total_lines);
     }
 
-    LineSegment return_val;
+    line_segment_t return_val;
     return_val.line = line;
     return_val.segment = remaining;
     return return_val;
@@ -343,21 +343,21 @@ void safe_insert(char** buf, uint16_t* buf_len, const char* str, size_t str_len,
     *buf_len += str_len;
 }
 
-void stack_init(Stack* s) {
+void stack_init(rope_stack_t* s) {
     s->capacity = 8;
     s->size = 0;
-    s->data = malloc(s->capacity * sizeof(RopeNode));
+    s->data = malloc(s->capacity * sizeof(rope_node_t));
 }
 
-void stack_push(Stack* s, RopeNode data) {
+void stack_push(rope_stack_t* s, rope_node_t data) {
     if (s->size == s->capacity) {
         s->capacity *= 2;
-        s->data = realloc(s->data, s->capacity * sizeof(RopeNode));
+        s->data = realloc(s->data, s->capacity * sizeof(rope_node_t));
     }
     s->data[s->size++] = data;
 }
 
-RopeNode stack_pop(Stack *s) {
+rope_node_t stack_pop(rope_stack_t *s) {
     return s->data[--s->size];
 }
 

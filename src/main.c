@@ -10,38 +10,38 @@
 #include <string.h>
 
 typedef struct {
-    EditorMode mode;
+    editor_mode_t mode;
     char   prompt_buf[256];
     size_t prompt_len;
     int dirty;
-} StatusBar;
+} status_bar_t;
 
 typedef struct {
     int active;
     size_t anchor_offset;
     int via_toggle;
-} Selection;
+} selection_t;
 
 typedef struct {
-    RopeNode root;
-    Cursor cursor;
+    rope_node_t root;
+    cursor_t cursor;
     char *filename;
     size_t line_offset;
     struct winsize ws;
-    StatusBar status_bar;
-    Selection selection;
+    status_bar_t status_bar;
+    selection_t selection;
 
     char *clipboard;
     size_t clipboard_len;
     size_t clipboard_cap;
-} Editor;
+} editor_t;
 
-int visible_rows(Editor *editor) {
+int visible_rows(editor_t *editor) {
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &editor->ws);
     return editor->ws.ws_row - 1;
 }
 
-void print_cursor_debug(Editor *editor) {
+void print_cursor_debug(editor_t *editor) {
     struct winsize ws;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws); // ws.ws_row / ws.ws_col = terminal size
     size_t total_newlines = rope_total_newlines(&editor->root);
@@ -56,7 +56,7 @@ void print_cursor_debug(Editor *editor) {
     write(STDOUT_FILENO, seq, len);
 }
 
-void print_key_buf_debug(Editor *editor, InputEvent event) {
+void print_key_buf_debug(editor_t *editor, input_event_t event) {
     char seq[128];
     int len = snprintf(seq, sizeof(seq),
             "\x1b""7"
@@ -68,7 +68,7 @@ void print_key_buf_debug(Editor *editor, InputEvent event) {
     write(STDOUT_FILENO, seq, len);
 }
 
-void save_file(Editor *editor, char *dst) {
+void save_file(editor_t *editor, char *dst) {
     char *buf = malloc(1024);
     size_t buf_len = 0, buf_cap = 1024;
     rope_collect(&editor->root, &buf, &buf_len, &buf_cap);
@@ -85,7 +85,7 @@ void save_file(Editor *editor, char *dst) {
     free(buf);
 }
 
-void load_file(Editor *editor, char *path) {
+void load_file(editor_t *editor, char *path) {
     int fd = open(path, O_RDONLY);
     if (fd == -1) return; // TODO! Handle error
     
@@ -108,7 +108,7 @@ void load_file(Editor *editor, char *path) {
     free(buf);
 }
 
-void handle_arrow_keys(Editor *editor, int arrow_key, int shift) {
+void handle_arrow_keys(editor_t *editor, int arrow_key, int shift) {
     if (shift && !editor->selection.active) {
         editor->selection.anchor_offset = editor->cursor.offset;
         editor->selection.active = 1;
@@ -129,7 +129,7 @@ void handle_arrow_keys(Editor *editor, int arrow_key, int shift) {
     scroll_to_cursor(&editor->cursor, &editor->root, &editor->line_offset, visible_rows(editor), editor->ws.ws_col - LEFT_MARGIN);
 }
 
-void handle_prompt_mode(Editor *editor, InputEvent event) {
+void handle_prompt_mode(editor_t *editor, input_event_t event) {
     if (event.byte_count == 1 && event.bytes[0] == '\n') {
         editor->status_bar.prompt_buf[editor->status_bar.prompt_len] = '\0';
         editor->filename = strdup(editor->status_bar.prompt_buf);
@@ -157,7 +157,7 @@ void handle_prompt_mode(Editor *editor, InputEvent event) {
     }
 }
 
-void editor_insert_text(Editor *editor, char *buf, size_t len) {
+void editor_insert_text(editor_t *editor, char *buf, size_t len) {
     rope_insert(&editor->root, editor->cursor.offset, buf, len);
 
     editor->cursor.offset += len;
@@ -176,7 +176,7 @@ void print_with_highlight(char *buf, size_t len, size_t start, size_t end) {
     Renderer_print_buf(buf + end, len - end);
 }
 
-void render(Editor *editor) {
+void render(editor_t *editor) {
     clear_screen();
 
     int _visible_rows = visible_rows(editor);
@@ -278,7 +278,7 @@ void render(Editor *editor) {
 }
 
 int main(int argc, char** argv) {
-    Editor editor = {0};
+    editor_t editor = {0};
 
     editor.filename = argv[1];
     if (argc < 2) editor.filename = NULL;
@@ -296,7 +296,7 @@ int main(int argc, char** argv) {
 
     while (1) {
         size_t total_newlines = rope_total_newlines(&editor.root);
-        InputEvent event = read_key();
+        input_event_t event = read_key();
 
         if (editor.status_bar.mode == MODE_PROMPT_SAVE) {
             handle_prompt_mode(&editor, event);
@@ -421,7 +421,7 @@ int main(int argc, char** argv) {
             case MOUSE_CLICK: {
                 size_t visible_width = editor.ws.ws_col - LEFT_MARGIN;
                 size_t target_visual_row = event.click_row - 2;
-                LineSegment loc = rope_line_of_visual_row(&editor.root, editor.line_offset, target_visual_row, editor.ws.ws_col - LEFT_MARGIN, total_newlines);
+                line_segment_t loc = rope_line_of_visual_row(&editor.root, editor.line_offset, target_visual_row, editor.ws.ws_col - LEFT_MARGIN, total_newlines);
                 int target_col_raw = ((int) event.click_col - 1) - LEFT_MARGIN;
                 target_col_raw = target_col_raw < 0 ? 0 : (size_t) target_col_raw;
 

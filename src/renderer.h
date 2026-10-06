@@ -37,14 +37,14 @@ enum editorKey {
 typedef enum {
     MODE_NORMAL,
     MODE_PROMPT_SAVE
-} EditorMode;
+} editor_mode_t;
 
 typedef struct {
     unsigned int parameterCount;
     unsigned int parameters[4];
     int privateMarker; // The leading < or ? after the [
     int finalChar;
-} CSI_Parser_return;
+} csi_parser_return_t;
 
 typedef struct {
     int keyCode;
@@ -55,7 +55,7 @@ typedef struct {
     int modifiers;
     char *paste_data;
     size_t paste_len;
-} InputEvent;
+} input_event_t;
 
 void Renderer_Init(void);
 void Renderer_Exit(void);
@@ -65,11 +65,11 @@ void Renderer_move_to(int row, int col);
 void Renderer_move_right(size_t chars);
 void Renderer_Print(int c);
 void Renderer_print_buf(char* buf, size_t buf_len);
-void Renderer_print_cursor(Cursor* cursor, RopeNode *root, size_t line_offset, size_t visible_rows, size_t visible_width);
+void Renderer_print_cursor(cursor_t* cursor, rope_node_t *root, size_t line_offset, size_t visible_rows, size_t visible_width);
 void Renderer_set_clipboard(const char *data, size_t len);
 char *Renderer_get_clipboard(void);
 
-void scroll_to_cursor(Cursor *cursor, RopeNode *root, size_t *line_offset, size_t visible_rows, size_t visible_width);
+void scroll_to_cursor(cursor_t *cursor, rope_node_t *root, size_t *line_offset, size_t visible_rows, size_t visible_width);
 
 void die(const char* s);
 // Private methods
@@ -78,8 +78,8 @@ void disable_raw_mode(void);
 
 // Might move out of renderer sometime
 int read_ascii_number(unsigned char *c);
-CSI_Parser_return csi_parse();
-InputEvent read_key(void);
+csi_parser_return_t csi_parse();
+input_event_t read_key(void);
 int utf8_seq_len(unsigned char lead);
 char *base64_encode(const unsigned char *data, size_t input_length, size_t *output_length);
 

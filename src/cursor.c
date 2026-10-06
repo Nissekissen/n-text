@@ -2,14 +2,14 @@
 #include "rope.h"
 #include "renderer.h"
 
-void cursor_init(Cursor *cursor) {
+void cursor_init(cursor_t *cursor) {
     cursor->row = 0;
     cursor->column = 0;
     cursor->goal_column = 0;
     cursor->offset = 0;
 }
 
-void cursor_get_row_col(Cursor *cursor, RopeNode *rope) {
+void cursor_get_row_col(cursor_t *cursor, rope_node_t *rope) {
     size_t line = rope_line_of_offset(rope, cursor->offset);
     size_t line_start = rope_offset_of_line_start(rope, line);
 
@@ -17,7 +17,7 @@ void cursor_get_row_col(Cursor *cursor, RopeNode *rope) {
     cursor->column = rope_count_chars_between(rope, line_start, cursor->offset);
 }
 
-void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta) {
+void cursor_move_vertical(cursor_t *cursor, rope_node_t *rope, int delta) {
     size_t total_lines = rope_total_newlines(rope);
     cursor_get_row_col(cursor, rope);
 
@@ -42,7 +42,7 @@ void cursor_move_vertical(Cursor *cursor, RopeNode *rope, int delta) {
     cursor->column = col;
 }
 
-void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta) {
+void cursor_move_horisontal(cursor_t *cursor, rope_node_t *rope, int delta) {
     size_t total_lines = rope_total_newlines(rope);
     cursor_get_row_col(cursor, rope);
     size_t line_length = rope_line_length(rope, cursor->row, total_lines);
@@ -62,7 +62,7 @@ void cursor_move_horisontal(Cursor *cursor, RopeNode *rope, int delta) {
     cursor->goal_column = cursor->column;
 }
 
-void cursor_backspace(Cursor *cursor, RopeNode *rope) {
+void cursor_backspace(cursor_t *cursor, rope_node_t *rope) {
     if (cursor->offset == 0) return;
 
     size_t back = move_back_utf8(rope, cursor->offset);
@@ -74,7 +74,7 @@ void cursor_backspace(Cursor *cursor, RopeNode *rope) {
     cursor->goal_column = cursor->column;
 }
 
-void cursor_delete_section(Cursor *cursor, RopeNode *rope, size_t start, size_t end) {
+void cursor_delete_section(cursor_t *cursor, rope_node_t *rope, size_t start, size_t end) {
     if (start > end) return;
     if (start == end) return cursor_backspace(cursor, rope);
 
@@ -85,11 +85,11 @@ void cursor_delete_section(Cursor *cursor, RopeNode *rope, size_t start, size_t 
     cursor->goal_column = cursor->column;
 }
 
-size_t cursor_segment(Cursor *cursor, size_t visible_width) {
+size_t cursor_segment(cursor_t *cursor, size_t visible_width) {
     return cursor->column / visible_width;
 }
 
-void cursor_set_position(Cursor *cursor, RopeNode *rope, size_t target_row, size_t target_col) {
+void cursor_set_position(cursor_t *cursor, rope_node_t *rope, size_t target_row, size_t target_col) {
     size_t total_lines = rope_total_newlines(rope);
     if (target_row > total_lines) target_row = total_lines;
 
@@ -107,7 +107,7 @@ void cursor_set_position(Cursor *cursor, RopeNode *rope, size_t target_row, size
     cursor->goal_column = col;
 }
 
-size_t move_forward_utf8(RopeNode *rope, size_t offset) {
+size_t move_forward_utf8(rope_node_t *rope, size_t offset) {
     char *buf = malloc(1);
     size_t buf_len = 0, buf_cap = 1;
     rope_collect_between(rope, offset, offset + 1, &buf, &buf_len, &buf_cap);
@@ -118,7 +118,7 @@ size_t move_forward_utf8(RopeNode *rope, size_t offset) {
     return len;
 }
 
-size_t move_back_utf8(RopeNode *rope, size_t offset) {
+size_t move_back_utf8(rope_node_t *rope, size_t offset) {
     size_t window_start = offset >= 4 ? offset - 4 : 0;
     char *buf = malloc(4);
     size_t buf_len = 0, buf_cap = 4;

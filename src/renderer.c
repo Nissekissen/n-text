@@ -100,7 +100,7 @@ void Renderer_print_buf(char* buf, size_t buf_len) {
     }
 }
 
-void Renderer_print_cursor(Cursor *cursor, RopeNode *root, size_t line_offset, size_t visible_rows, size_t visible_width) {
+void Renderer_print_cursor(cursor_t *cursor, rope_node_t *root, size_t line_offset, size_t visible_rows, size_t visible_width) {
     size_t cursor_visual_row = rope_segment_count_between(root, line_offset, cursor->row, visible_width) + cursor_segment(cursor, visible_width);
 
     if (cursor->row < line_offset || cursor_visual_row >= visible_rows) {
@@ -194,7 +194,7 @@ void enable_raw_mode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-void normalize_line_endings(InputEvent *event) {
+void normalize_line_endings(input_event_t *event) {
     size_t w = 0;
     for (size_t r = 0; r < event->paste_len; r++) {
         if (r < event->paste_len - 1 && event->paste_data[r] == '\r' && event->paste_data[r+ 1] == '\n') continue;
@@ -211,7 +211,7 @@ void normalize_line_endings(InputEvent *event) {
     event->paste_len = w;
 }
 
-void scroll_to_cursor(Cursor *cursor, RopeNode *root, size_t *line_offset, size_t visible_rows, size_t visible_width) {
+void scroll_to_cursor(cursor_t *cursor, rope_node_t *root, size_t *line_offset, size_t visible_rows, size_t visible_width) {
     size_t cursor_visual_row = rope_segment_count_between(root, *line_offset, cursor->row, visible_width) + cursor_segment(cursor, visible_width);
     if (cursor->row < *line_offset) *line_offset = cursor->row; // Scroll up
 
@@ -249,8 +249,8 @@ int csi_get_arrow_key(unsigned char c) {
     }
 }
 
-InputEvent read_key(void) {
-    InputEvent event = {0};
+input_event_t read_key(void) {
+    input_event_t event = {0};
     
     unsigned char c;
     ssize_t nread;
@@ -296,7 +296,7 @@ InputEvent read_key(void) {
             return event;
         }
         
-        CSI_Parser_return parse_value = csi_parse();
+        csi_parser_return_t parse_value = csi_parse();
         if (parse_value.privateMarker == '<') {
             // mouse scrolling / click
             if (parse_value.parameterCount < 3) { event.keyCode = ESC; return event; } // Malformed
@@ -382,9 +382,9 @@ int is_csi_parameter_byte(unsigned char c) {
     return c >= 0x30 && c <= 0x3F;
 }
 
-CSI_Parser_return csi_parse() {
+csi_parser_return_t csi_parse() {
     // ESC[ has already been read.
-    CSI_Parser_return return_val = {0};
+    csi_parser_return_t return_val = {0};
     char c;
     int paramFlag = 0;
     while (read(STDIN_FILENO, &c, 1) == 1) {

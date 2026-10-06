@@ -50,4 +50,3 @@ ntxt file.txt
 - [x] Show line numbers
 - [x] Copy/paste
 - [x] Goal column when moving cursor
-- [ ] Rendering bug when line overflows
