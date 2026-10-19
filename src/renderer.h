@@ -34,11 +34,6 @@ enum editorKey {
     PASTE
 };
 
-typedef enum {
-    MODE_NORMAL,
-    MODE_PROMPT_SAVE
-} editor_mode_t;
-
 typedef struct {
     unsigned int parameterCount;
     unsigned int parameters[4];
